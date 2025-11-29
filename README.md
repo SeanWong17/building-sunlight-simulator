@@ -24,7 +24,7 @@ open editor.html      # 2D 规划图配置器
 open viewer.html      # 3D 采光可视化
 ```
 
-或者访问在线演示：[Live Demo](https://seanwong17.github.io/gsy_daylighting/)
+或者访问在线演示：[Live Demo](https://guanshanyue-daylighting.netlify.app/)
 
 ## 📖 使用流程
 
@@ -49,6 +49,8 @@ open viewer.html      # 3D 采光可视化
 > - `右键` 撤销上一个绘制点
 > - `双击左键` 完成该轮廓绘制
 
+![效果示例](examples/editor.png)
+
 ### 2. 采光可视化 (viewer.html)
 **步骤：**
 1. **导入 JSON**：点击「选择 JSON 文件」加载配置
@@ -56,6 +58,7 @@ open viewer.html      # 3D 采光可视化
 3. **调节时间**：拖动滑块查看 06:00–18:00 阴影变化
 4. **过滤显示**：勾选「只显示本小区」隐藏周边楼栋
 
+![效果示例](examples/vis.png)
 
 ## 📁 项目结构
 
@@ -65,6 +68,8 @@ building-sunlight-simulator/
 ├── viewer.html          # 3D 采光可视化（单文件）
 ├── examples/
 │   ├── screenshots.jpg  # 示例俯视图
+│   ├── editor.png       # 配置页面图
+│   ├── vis.png          # 效果展示图
 │   └── sample.json      # 示例配置文件
 ├── README.md
 └── LICENSE
