@@ -24,7 +24,7 @@ open editor.html      # 2D 规划图配置器
 open viewer.html      # 3D 采光可视化
 ```
 
-或者访问在线演示：[Live Demo](https://mammalia-tree.pages.dev/)
+或者访问在线演示：[Live Demo](https://guanshanyue-daylighting.netlify.app/)
 
 ## 📖 使用流程
 
