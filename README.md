@@ -21,7 +21,7 @@ cd building-sunlight-simulator
 
 # 直接打开即可使用（无需构建）
 open editor.html      # 2D 规划图配置器
-open viewer.html      # 3D 采光可视化
+open index.html      # 3D 采光可视化
 ```
 
 或者访问在线演示：[Live Demo](https://guanshanyue-daylighting.netlify.app/)
@@ -30,7 +30,7 @@ open viewer.html      # 3D 采光可视化
 
 ```text
 ┌─────────────────┐      导出 JSON      ┌─────────────────┐
-│  editor.html    │  ───────────────▶  │  viewer.html    │
+│  editor.html    │  ───────────────▶  │  index.html    │
 │  规划图配置器    │                     │  采光可视化      │
 └─────────────────┘                     └─────────────────┘
 ```
@@ -51,7 +51,7 @@ open viewer.html      # 3D 采光可视化
 
 ![效果示例](examples/editor.png)
 
-### 2. 采光可视化 (viewer.html)
+### 2. 采光可视化 (index.html)
 **步骤：**
 1. **导入 JSON**：点击「选择 JSON 文件」加载配置
 2. **选择日期**：冬至 / 春秋分 / 夏至
@@ -65,11 +65,12 @@ open viewer.html      # 3D 采光可视化
 ```text
 building-sunlight-simulator/
 ├── editor.html          # 2D 规划图配置器（单文件）
-├── viewer.html          # 3D 采光可视化（单文件）
+├── index.html          # 3D 采光可视化（单文件）
 ├── examples/
 │   ├── screenshots.jpg  # 示例俯视图
 │   ├── editor.png       # 配置页面图
 │   ├── vis.png          # 效果展示图
+│   ├── sample_data.js   # 默认配置文件
 │   └── sample.json      # 示例配置文件
 ├── README.md
 └── LICENSE
