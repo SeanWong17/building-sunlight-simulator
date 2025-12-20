@@ -123,11 +123,12 @@
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  
+  <script src="examples/sample_data.js" onerror="console.log('未找到默认示例数据，请手动上传')"></script>
 </head>
 <body>
   <div id="empty-state">请在右上角导入 JSON 配置文件</div>
 
-  <!-- 控制面板 -->
   <div id="controls" data-collapsed="false" aria-label="控制面板">
     <div class="fab" id="fabBtn" title="展开">☰</div>
     <div class="panel-content">
@@ -158,7 +159,6 @@
         </select>
       </div>
 
-      <!-- 新增：显示范围 -->
       <div class="control-group">
         <label>显示范围</label>
         <div class="inline-row" title="勾选后仅显示 isThisCommunity=true 的楼栋">
@@ -167,7 +167,6 @@
         </div>
       </div>
 
-      <!-- 桌面时间块 -->
       <div class="control-group" id="timeBlock">
         <label for="timeSlider">时间 (06:00 - 18:00)</label>
         <input type="range" id="timeSlider" min="6" max="18" step="0.05" value="10" />
@@ -180,14 +179,12 @@
     </div>
   </div>
 
-  <!-- 底部时间迷你条（移动端） -->
   <div id="timeDock" aria-label="时间控制" role="group" style="display:none;">
     <span class="timeLabel">时间</span>
     <input type="range" id="timeSliderDock" min="6" max="18" step="0.05" value="10" />
     <span class="timeValue" id="timeTextDock">10:00</span>
   </div>
 
-  <!-- 指南针（上为北） -->
   <div id="compass" aria-hidden="true">
     <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
       <circle cx="50" cy="50" r="45" fill="rgba(255,255,255,0.75)" stroke="#333" stroke-width="2"/>
@@ -231,18 +228,17 @@
   const gridHelper = new THREE.GridHelper(2000, 100, 0xcfd8e3, 0xe9eff5);
   scene.add(gridHelper);
 
-  // 北向箭头（与指南针对应，上为北，Z 轴负方向为北）
+  // 北向箭头
   const northDir = new THREE.Vector3(0, 0, -1);
   const northOrigin = new THREE.Vector3(0, 1, 180);
   const arrowHelper = new THREE.ArrowHelper(northDir, northOrigin, 24, 0xff3b30, 10, 5);
   scene.add(arrowHelper);
 
-  // 楼栋组（每栋为一个子 Group，便于整体显隐）
+  // 楼栋组
   const buildingsGroup = new THREE.Group();
   scene.add(buildingsGroup);
 
   // ========== 纹理与工具函数 ==========
-  // 每层户数可变的外立面纹理
   function createFacadeTexture(floors, unitsPerFloor) {
     const floorPx = 28;
     const width = 512;
@@ -253,14 +249,12 @@
     canvas.height = height;
     const ctx = canvas.getContext('2d');
 
-    // 背景渐变
     const grd = ctx.createLinearGradient(0, 0, 0, canvas.height);
     grd.addColorStop(0, '#b1bfd1');
     grd.addColorStop(1, '#a2b2c7');
     ctx.fillStyle = grd;
     ctx.fillRect(0, 0, width, height);
 
-    // 逐层绘制
     for (let f = 0; f < floors; f++) {
       const y0 = Math.floor(f * floorPx);
       const y1 = Math.floor((f + 1) * floorPx);
@@ -292,7 +286,6 @@
 
   const roofMaterial = new THREE.MeshStandardMaterial({ color: 0xf5f7fa, roughness: 0.9, metalness: 0.0 });
 
-  // 可配置的描边
   function createEdgeLines(geometry, color = 0x435061, opacity = 0.5) {
     const edges = new THREE.EdgesGeometry(geometry, 15);
     const line = new THREE.LineSegments(
@@ -302,7 +295,6 @@
     return line;
   }
 
-  // 楼号标签：若文本为空则不创建
   function createLabel(text, x, y, z) {
     const t = (text ?? '').toString().trim();
     if (!t) return null;
@@ -312,7 +304,6 @@
     canvas.width = size; canvas.height = size / 2;
     const ctx = canvas.getContext('2d');
 
-    // 圆角背景
     const r = 28, w = size - 24, h = (size/2) - 24, x0 = 12, y0 = 12;
     ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
     ctx.beginPath();
@@ -379,7 +370,6 @@
     };
   }
 
-  // 归一化每层户数：支持 units 或 unitsPerFloor
   function normalizeUnitsPerFloor(building) {
     const floors = Math.max(1, parseInt(building.floors || 1, 10));
     if (Array.isArray(building.unitsPerFloor) && building.unitsPerFloor.length > 0) {
@@ -396,9 +386,9 @@
     }
   }
 
-  // ========== 加载 JSON ==========
-  let LATITUDE = 36.65; // 可被 JSON 顶层 latitude 覆盖
-  let showOwnOnly = false; // “只显示本小区”开关状态
+  // ========== 加载逻辑 ==========
+  let LATITUDE = 36.65;
+  let showOwnOnly = false;
   const jsonInput = document.getElementById('jsonInput');
 
   jsonInput.addEventListener('change', (e) => {
@@ -435,12 +425,13 @@
 
   function loadBuildings(data) {
     clearGroup(buildingsGroup);
+    if (data.latitude) LATITUDE = data.latitude; // 确保加载数据时更新纬度
+
     if (!data || !Array.isArray(data.buildings) || data.buildings.length === 0) return;
 
     data.buildings.forEach(b => {
       if (!b.shape || b.shape.length < 3) return;
 
-      // 构建 2D 轮廓（Three 中 y 取 -shape.y）
       const shape = new THREE.Shape();
       shape.moveTo(b.shape[0].x, -b.shape[0].y);
       for (let i = 1; i < b.shape.length; i++) {
@@ -466,15 +457,12 @@
       const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
       geometry.computeVertexNormals();
 
-      // 是否本小区：默认 true
       const own = (typeof b.isThisCommunity === 'boolean') ? b.isThisCommunity : true;
 
-      // 楼栋容器
       const node = new THREE.Group();
       node.userData = { own, name: b.name || '' };
       buildingsGroup.add(node);
 
-      // 材质与网格
       let mesh;
       if (own) {
         const sideTexture = createFacadeTexture(floors, unitsPerFloor);
@@ -500,14 +488,12 @@
       mesh.receiveShadow = true;
       node.add(mesh);
 
-      // 描边
       const edgesColor = own ? 0x435061 : 0x7c8896;
       const edgesOpacity = own ? 0.5 : 0.28;
       const edges = createEdgeLines(geometry, edgesColor, edgesOpacity);
       edges.rotation.x = -Math.PI / 2;
       node.add(edges);
 
-      // 标签放置在原始 shape 坐标的几何中心上方
       let cx = 0, cy = 0;
       b.shape.forEach(p => { cx += p.x; cy += p.y; });
       cx /= b.shape.length; cy /= b.shape.length;
@@ -519,12 +505,11 @@
       }
     });
 
-    // 应用过滤并自适应视角
     applyVisibilityFilter(false);
     fitViewToBuildings();
   }
 
-  // ========== 视角/雾化/阴影范围自适应 ==========
+  // ========== 视角与工具 ==========
   function fitViewToBuildings(padding = 1.3) {
     const nodes = buildingsGroup.children.filter(n => n.visible);
     if (nodes.length === 0) return;
@@ -551,18 +536,15 @@
     controls.maxDistance = dist * 2.5;
     controls.update();
 
-    // 阴影相机范围
     const sd = Math.max(maxSize * 1.5, 200);
     sunLight.shadow.camera.left = -sd; sunLight.shadow.camera.right = sd;
     sunLight.shadow.camera.top = sd;   sunLight.shadow.camera.bottom = -sd;
     sunLight.shadow.camera.far = Math.max(1500, sd * 5);
 
-    // 雾化范围
     scene.fog.near = Math.max(120, maxSize * 0.8);
     scene.fog.far  = Math.max(900, maxSize * 6);
   }
 
-  // ========== 显示过滤：只显示本小区 ==========
   function applyVisibilityFilter(shouldFit = true) {
     buildingsGroup.children.forEach(node => {
       if (typeof node.userData?.own === 'boolean') {
@@ -572,7 +554,6 @@
     if (shouldFit) fitViewToBuildings();
   }
 
-  // ========== 灯光 / 太阳 ==========
   const sunLight = new THREE.DirectionalLight(0xffffff, 1.2);
   sunLight.castShadow = true;
   sunLight.shadow.mapSize.width = 4096;
@@ -584,15 +565,12 @@
   sunLight.shadow.camera.near = 1;
   sunLight.shadow.camera.far = 2000;
   scene.add(sunLight);
-
   scene.add(new THREE.AmbientLight(0x9fb3c8, 0.5));
 
   function getCurrentHour() {
     const desk = document.getElementById('timeSlider');
     const dock = document.getElementById('timeSliderDock');
-    if (dock && dock.style.display !== 'none') {
-      return parseFloat(dock.value);
-    }
+    if (dock && dock.style.display !== 'none') return parseFloat(dock.value);
     return parseFloat(desk.value);
   }
   function setHour(val) {
@@ -614,8 +592,6 @@
   function updateSun() {
     const hour = getCurrentHour();
     const decl = parseFloat(document.getElementById('seasonSelect').value);
-
-    // UI 时间同步
     setTimeText(hour);
 
     const rad = Math.PI / 180;
@@ -623,11 +599,9 @@
     const lat = LATITUDE * rad;
     const dec = decl * rad;
 
-    // 高度角
     const sinAlt = Math.sin(lat) * Math.sin(dec) + Math.cos(lat) * Math.cos(dec) * Math.cos(hAngle);
     const alt = Math.asin(Math.max(-1, Math.min(1, sinAlt)));
 
-    // 方位角
     const cosAz = (sinAlt * Math.sin(lat) - Math.sin(dec)) / (Math.cos(alt) * Math.cos(lat));
     let az = Math.acos(Math.min(1, Math.max(-1, cosAz)));
     if (hour >= 12) az = -az;
@@ -639,29 +613,18 @@
     const z = r * Math.cos(az);
 
     sunLight.position.set(x, y, z);
-    sunLight.target?.position?.set(0, 0, 0);
-    sunLight.target?.updateMatrixWorld?.();
     sunLight.intensity = alt > 0 ? 1.2 : 0.0;
   }
 
-  // ========== 交互绑定 ==========
   function bindUI() {
-    const seasonSelect = document.getElementById('seasonSelect');
-    const timeSlider = document.getElementById('timeSlider');
-    const timeSliderDock = document.getElementById('timeSliderDock');
-    const ownOnlyChk = document.getElementById('toggleOwnOnly');
-
-    seasonSelect.addEventListener('change', updateSun);
-    timeSlider.addEventListener('input', (e) => { setHour(e.target.value); updateSun(); });
-    timeSliderDock.addEventListener('input', (e) => { setHour(e.target.value); updateSun(); });
-
-    // 新增：只显示本小区
-    ownOnlyChk.addEventListener('change', (e) => {
+    document.getElementById('seasonSelect').addEventListener('change', updateSun);
+    document.getElementById('timeSlider').addEventListener('input', (e) => { setHour(e.target.value); updateSun(); });
+    document.getElementById('timeSliderDock').addEventListener('input', (e) => { setHour(e.target.value); updateSun(); });
+    document.getElementById('toggleOwnOnly').addEventListener('change', (e) => {
       showOwnOnly = !!e.target.checked;
       applyVisibilityFilter(true);
     });
 
-    // 折叠按钮（仅小屏显示）
     const controlsPanel = document.getElementById('controls');
     const fabBtn = document.getElementById('fabBtn');
     const mql = window.matchMedia('(max-width: 600px)');
@@ -670,7 +633,6 @@
       const dock = document.getElementById('timeDock');
       if (mql.matches) {
         dock.style.display = 'flex';
-        // 默认收起
         controlsPanel.setAttribute('data-collapsed', 'true');
       } else {
         dock.style.display = 'none';
@@ -686,7 +648,6 @@
     mql.addEventListener('change', applyMobileLayout);
   }
 
-  // ========== 渲染循环 ==========
   function animate() {
     requestAnimationFrame(animate);
     controls.update();
@@ -699,13 +660,23 @@
   updateSun();
   animate();
 
-  // ========== 响应式 ==========
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth/window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
     fitViewToBuildings();
   });
+
+  // 尝试加载默认数据
+  if (typeof DEFAULT_DATA !== 'undefined') {
+    console.log('检测到默认数据，正在加载...');
+    loadBuildings(DEFAULT_DATA);
+    // 隐藏空状态提示
+    document.getElementById('empty-state').style.display = 'none';
+  } else {
+    console.log('未检测到 DEFAULT_DATA 变量，等待手动上传文件');
+  }
+
 </script>
 </body>
 </html>
