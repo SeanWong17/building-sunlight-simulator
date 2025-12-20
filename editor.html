@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         :root {
-            --top-pane-height: 40vh;   /* 上半部分（步骤1-4）初始高度，可拖动外层分隔条调整 */
-            --table-height: 32vh;      /* 下半部分内，表格初始高度，可拖动内层分隔条调整 */
+            --top-pane-height: 44vh;   /* 稍微调高一点初始高度，容纳新增的输入框 */
+            --table-height: 28vh;
         }
 
         body { display: flex; margin: 0; height: 100vh; font-family: 'Microsoft YaHei', sans-serif; overflow: hidden; }
@@ -38,7 +38,7 @@
             padding: 5px 10px; border-radius: 4px; font-size: 12px; pointer-events: none;
         }
 
-        /* 右侧边栏整体布局：上下两块+两个分隔条 */
+        /* 右侧边栏整体布局 */
         #sidebar {
             width: 460px; background: #f8f9fa; border-left: 1px solid #ccc;
             padding: 16px; display: flex; flex-direction: column; z-index: 10;
@@ -47,10 +47,10 @@
             gap: 8px;
         }
 
-        /* 上半部分（步骤1-4） */
+        /* 上半部分 */
         #topPane {
             height: var(--top-pane-height);
-            min-height: 160px;
+            min-height: 180px;
             overflow: auto;
             border: 1px solid #e9ecef;
             border-radius: 8px;
@@ -58,7 +58,7 @@
             padding: 10px;
         }
 
-        /* 外层分隔条：调整 topPane 与 bottomPane 比例 */
+        /* 外层分隔条 */
         .resizer {
             height: 8px;
             cursor: row-resize;
@@ -76,10 +76,10 @@
             box-shadow: inset 0 0 0 1px #9fb8d3;
         }
 
-        /* 下半部分（步骤5：表格区 + 内层分隔条 + 导出按钮） */
+        /* 下半部分 */
         #bottomPane {
             flex: 1;
-            min-height: 220px;
+            min-height: 200px;
             overflow: hidden;
             display: flex;
             flex-direction: column;
@@ -98,6 +98,7 @@
         .inline-inputs .field { display: flex; flex-direction: column; }
         .inline-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
         .inline-row input[type="checkbox"] { transform: scale(1.1); }
+        .muted { color: #666; font-size: 12px; margin-bottom: 4px; }
 
         button {
             width: 100%; padding: 10px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; margin-bottom: 6px; font-size: 14px;
@@ -110,10 +111,11 @@
         button.success { background: #28a745; }
         button.success:hover { background: #218838; }
         button.warning { background: #ffc107; color: #333; }
-        button.warning:hover { background: #e0a800; }
         button:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-outline { background: transparent; color: #007bff; border: 1px solid #80bdff; }
+        .btn-outline:hover { background: #e7f1ff; }
 
-        /* 内层表格容器与分隔条 */
+        /* 内层表格 */
         #step-table { margin: 0; padding: 12px; border: 1px solid #ddd; border-radius: 6px; background: #fff; }
         #tableResizer { margin: 4px 0; }
         #table-wrapper {
@@ -126,14 +128,10 @@
         thead th { position: sticky; top: 0; background: #f1f3f5; z-index: 1; }
         th, td { border-bottom: 1px solid #eee; padding: 6px; text-align: left; }
         td input { width: 100%; padding: 6px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; }
-        td .center { color: #555; font-family: Consolas, Menlo, monospace; }
         td .btn-mini { display: inline-block; padding: 4px 8px; font-size: 12px; border-radius: 4px; border: none; cursor: pointer; }
         .btn-danger { background: #dc3545; color: #fff; }
         .btn-danger:hover { background: #c82333; }
-        .btn-outline { background: transparent; color: #007bff; border: 1px solid #80bdff; }
-        .btn-outline:hover { background: #e7f1ff; }
 
-        /* 小屏自适应：侧边栏变为底部抽屉 */
         @media (max-width: 768px) {
             #sidebar { width: 100vw; position: absolute; right: 0; left: 0; bottom: 0; max-height: 60vh; overflow: hidden; }
             #topPane { max-height: 55vh; }
@@ -152,7 +150,6 @@
 <div id="sidebar">
     <h3>🛠️ 楼盘数据配置</h3>
 
-    <!-- 上半部分（步骤1-4），可整体滚动 -->
     <div id="topPane">
         <div class="step" id="step-upload">
             <label>1. 上传规划图/总平图</label>
@@ -184,7 +181,16 @@
         </div>
 
         <div class="step" id="step-defaults">
-            <label>4. 全局默认参数</label>
+            <label>4. 全局参数 & 默认值</label>
+            
+            <div style="background:#f1f8ff; padding:8px; border-radius:4px; margin-bottom:10px; border:1px solid #d0e3ff;">
+                <div class="field">
+                    <span class="muted" style="color:#0056b3; font-weight:bold;">项目纬度 (Latitude)</span>
+                    <input type="number" id="projectLat" value="36.65" step="0.01" style="border-color:#b6d4fe;">
+                </div>
+            </div>
+
+            <label style="font-size:12px; color:#555; margin-bottom:5px;">新楼栋默认参数:</label>
             <div class="inline-inputs">
                 <div class="field">
                     <span class="muted">默认层数</span>
@@ -213,17 +219,14 @@
         </div>
     </div>
 
-    <!-- 外层分隔条：控制上(步骤1-4)与下(步骤5)的高度比例 -->
-    <div class="resizer" id="outerResizer" title="拖动以调整上方步骤区与下方表格区的高度"></div>
+    <div class="resizer" id="outerResizer" title="拖动以调整区域高度"></div>
 
-    <!-- 下半部分（步骤5 + 内层分隔条 + 表格） -->
     <div id="bottomPane">
         <div class="step" id="step-table" style="margin:0;">
             <label>5. 楼栋参数表（统一填写/编辑）</label>
         </div>
 
-        <!-- 内层分隔条：调整表格高度 -->
-        <div class="resizer" id="tableResizer" title="拖动以调整下方表格高度"></div>
+        <div class="resizer" id="tableResizer" title="拖动以调整表格高度"></div>
 
         <div id="table-wrapper">
             <table>
@@ -237,9 +240,7 @@
                         <th style="width:80px;">操作</th>
                     </tr>
                 </thead>
-                <tbody id="tableBody">
-                    <!-- 动态行 -->
-                </tbody>
+                <tbody id="tableBody"></tbody>
             </table>
         </div>
 
@@ -256,6 +257,7 @@
     const emptyTip = document.getElementById('empty-tip');
 
     // 默认参数元素
+    const projectLatEl = document.getElementById('projectLat'); // 新增
     const defFloorsEl = document.getElementById('defFloors');
     const defFloorHeightEl = document.getElementById('defFloorHeight');
     const defUnitsEl = document.getElementById('defUnits');
@@ -263,32 +265,21 @@
     const btnApplyDefaultsAll = document.getElementById('btnApplyDefaultsAll');
     const chkUseDefaults = document.getElementById('chkUseDefaults');
 
-    // 核心数据
     let image = new Image();
     let isImageLoaded = false;
-    let scaleRatio = 0; // 1像素 = 多少米
-    // {id,name,floors,floorHeight,units,isThisCommunity,points:[]}
+    let scaleRatio = 0; 
     let buildings = [];
-
-    // 视图状态
     let viewScale = 1.0;
     let viewX = 0;
     let viewY = 0;
-
-    // 交互模式
-    let mode = 'idle'; // 'idle', 'scaling', 'drawing'
-
-    // 临时数据
+    let mode = 'idle'; 
     let scalePoints = [];
     let currentPoly = [];
     let mousePos = {x:0, y:0};
-
-    // 视图拖拽
     let isDragging = false;
     let lastMouseX = 0;
     let lastMouseY = 0;
 
-    // 吸附/闭合
     const CLOSE_EPS_BASE = 8;
     function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
     function pointsEqual(a, b, eps = 0) {
@@ -297,20 +288,15 @@
         return a.x === b.x && a.y === b.y;
     }
 
-    // ========== 新增：多边形净化 ==========
-    // 去掉末尾重复首点、相邻近重复点、近似共线点、极短边
+    // 多边形净化
     function sanitizePolygon(rawPoints, epsPx = 0.5) {
         if (!Array.isArray(rawPoints)) return [];
         const eps = Math.max(1e-6, epsPx);
-
-        // 0) 拷贝后去掉首尾重复
         let pts = rawPoints.slice();
         if (pts.length >= 2 && pointsEqual(pts[0], pts[pts.length - 1], eps)) {
             pts.pop();
         }
         if (pts.length < 3) return pts;
-
-        // 1) 去相邻近重复点
         const dedup = [];
         for (let i = 0; i < pts.length; i++) {
             const p = pts[i];
@@ -319,14 +305,11 @@
         }
         if (dedup.length >= 2 && pointsEqual(dedup[0], dedup[dedup.length - 1], eps)) dedup.pop();
         if (dedup.length < 3) return dedup;
-
-        // 2) 去极短边
         const shortThresh = eps;
         let clean = dedup.slice();
         let changed = true;
         function edgeLen(i, j) { return dist(clean[i], clean[j]); }
         function mod(n, m) { return ((n % m) + m) % m; }
-
         while (changed && clean.length > 3) {
             changed = false;
             for (let i = 0; i < clean.length; i++) {
@@ -339,8 +322,6 @@
             }
         }
         if (clean.length < 3) return clean;
-
-        // 3) 去近似共线点
         const result = [];
         const n = clean.length;
         for (let i = 0; i < n; i++) {
@@ -355,11 +336,9 @@
             if (cross > eps * (len1 + len2)) result.push(p1);
         }
         if (result.length < 3) return clean;
-
         return result;
     }
 
-    // 图片加载
     fileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if(!file) return;
@@ -368,7 +347,6 @@
             image.onload = () => {
                 canvas.style.display = 'block';
                 emptyTip.style.display = 'none';
-
                 canvas.width = image.width;
                 canvas.height = image.height;
                 isImageLoaded = true;
@@ -381,7 +359,6 @@
         reader.readAsDataURL(file);
     });
 
-    // 重置视图
     function resetView() {
         if(!isImageLoaded) return;
         const padding = 40;
@@ -399,7 +376,6 @@
         zoomInfo.innerText = `缩放: ${Math.round(viewScale * 100)}%`;
     }
 
-    // 坐标换算
     function getCanvasCoordinates(e) {
         const rect = wrapper.getBoundingClientRect();
         const mouseXInWrapper = e.clientX - rect.left;
@@ -409,36 +385,26 @@
         return { x: canvasX, y: canvasY };
     }
 
-    // 滚轮缩放
     wrapper.addEventListener('wheel', (e) => {
         if(!isImageLoaded) return;
         e.preventDefault();
-
         const zoomSpeed = 0.1;
         const delta = e.deltaY > 0 ? (1 - zoomSpeed) : (1 + zoomSpeed);
         const newScale = Math.min(Math.max(viewScale * delta, 0.1), 10);
-
         const rect = wrapper.getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
         const mouseY = e.clientY - rect.top;
-
         const canvasOffsetX = (mouseX - viewX);
         const canvasOffsetY = (mouseY - viewY);
-
         viewX = mouseX - (canvasOffsetX * (newScale / viewScale));
         viewY = mouseY - (canvasOffsetY * (newScale / viewScale));
-
         viewScale = newScale;
         updateTransform();
     }, { passive: false });
 
-    // 鼠标按下：拖拽视图、加点、撤销
     wrapper.addEventListener('mousedown', (e) => {
         if(!isImageLoaded) return;
-
         const isSpacePressed = e.getModifierState && e.getModifierState(" ");
-
-        // 视图拖拽：中键，或空格+左键，或在浏览模式下左键
         if (e.button === 1 || (mode === 'idle' && e.button === 0) || (isSpacePressed && e.button === 0)) {
             isDragging = true;
             lastMouseX = e.clientX;
@@ -447,8 +413,6 @@
             e.preventDefault();
             return;
         }
-
-        // 左键加点
         if (e.button === 0) {
             const p = getCanvasCoordinates(e);
             if (mode === 'scaling') {
@@ -464,8 +428,6 @@
                 draw();
             }
         }
-
-        // 右键撤销上个点
         if (e.button === 2) {
             if (mode === 'drawing' && currentPoly.length > 0) {
                 currentPoly.pop();
@@ -474,7 +436,6 @@
         }
     });
 
-    // 左键双击结束闭合
     wrapper.addEventListener('dblclick', (e) => {
         if (!isImageLoaded) return;
         if (mode === 'drawing' && e.button === 0) {
@@ -495,7 +456,6 @@
             updateTransform();
             return;
         }
-
         if(!isImageLoaded) return;
         mousePos = getCanvasCoordinates(e);
         if (mode === 'drawing') draw();
@@ -506,17 +466,12 @@
         wrapper.classList.remove('grabbing');
     });
 
-    // 防止右键菜单干扰撤销
     canvas.addEventListener('contextmenu', e => e.preventDefault());
 
-    // 渲染
     function draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         if (!isImageLoaded) return;
-
         ctx.drawImage(image, 0, 0);
-
-        // 已保存楼栋
         buildings.forEach(b => {
             drawPolygon(b.points, 'rgba(0, 123, 255, 0.28)', '#007bff');
             const center = getPolygonCenter(b.points);
@@ -527,8 +482,6 @@
             ctx.strokeText(b.name, center.x - 10, center.y);
             ctx.fillText(b.name, center.x - 10, center.y);
         });
-
-        // 标定显示
         if (scalePoints.length > 0) drawPoint(scalePoints[0], 'red');
         if (scalePoints.length === 2) {
             drawPoint(scalePoints[1], 'red');
@@ -539,13 +492,10 @@
             ctx.lineWidth = 2 / viewScale;
             ctx.stroke();
         }
-
-        // 当前绘制
         if (currentPoly.length > 0) {
             const first = currentPoly[0];
             const eps = CLOSE_EPS_BASE / viewScale;
             const nearStart = dist(mousePos, first) <= eps && currentPoly.length > 2;
-
             ctx.beginPath();
             ctx.moveTo(currentPoly[0].x, currentPoly[0].y);
             for (let i = 1; i < currentPoly.length; i++) {
@@ -555,8 +505,6 @@
             ctx.strokeStyle = '#28a745';
             ctx.lineWidth = 2 / viewScale;
             ctx.stroke();
-
-            // 点位
             currentPoly.forEach((p, idx) => drawPoint(p, idx === 0 ? '#ff9800' : '#28a745'));
             if (nearStart) {
                 ctx.beginPath();
@@ -607,7 +555,6 @@
             draw();
             return;
         }
-
         const eps = 0.75;
         const cleaned = sanitizePolygon(currentPoly, eps);
         if (cleaned.length < 3) {
@@ -616,7 +563,6 @@
             draw();
             return;
         }
-
         const idx = buildings.length + 1;
         const useDefaults = chkUseDefaults.checked;
         const b = {
@@ -624,7 +570,7 @@
             name: `${idx}号楼`,
             floors: useDefaults ? clampInt(parseInt(defFloorsEl.value), 1, 300, 18) : 18,
             floorHeight: useDefaults ? clampNum(parseFloat(defFloorHeightEl.value), 1, 20, 3) : 3,
-            units: useDefaults ? clampInt(parseInt(defUnitsEl.value), 1, 20, 2) : 2,
+            units: useDefaults ? clampInt(parseInt(defUnitsEl.value), 1, 50, 2) : 2,
             isThisCommunity: useDefaults ? !!defIsThisCommunityEl.checked : true,
             points: cleaned
         };
@@ -634,7 +580,6 @@
         draw();
     }
 
-    // 标定
     document.getElementById('btnStartScale').addEventListener('click', () => {
         scalePoints = [];
         mode = 'scaling';
@@ -659,10 +604,9 @@
         document.getElementById('scaleStatus').innerText = `已标定 (1px ≈ ${scaleRatio.toFixed(4)}m)`;
         document.getElementById('scaleInputArea').style.display = 'none';
         toggleDrawMode(true);
-        renderTable(); // 保留（尽管表格无中心点列）
+        renderTable(); 
     });
 
-    // 绘制模式切换
     const btnDrawMode = document.getElementById('btnDrawMode');
     btnDrawMode.addEventListener('click', () => {
         toggleDrawMode(mode !== 'drawing');
@@ -693,15 +637,12 @@
         }
     }
 
-    // 表格渲染
     const tableBody = document.getElementById('tableBody');
 
     function renderTable() {
         tableBody.innerHTML = '';
         buildings.forEach((b, i) => {
             const tr = document.createElement('tr');
-
-            // 名称
             const tdName = document.createElement('td');
             const inpName = document.createElement('input');
             inpName.type = 'text';
@@ -709,11 +650,10 @@
             inpName.placeholder = '输入名称（如：1号楼/配建/幼儿园）';
             inpName.addEventListener('input', () => {
                 b.name = inpName.value || `${i+1}号楼`;
-                draw(); // 画布标签实时更新
+                draw(); 
             });
             tdName.appendChild(inpName);
 
-            // 层数
             const tdFloors = document.createElement('td');
             const inpFloors = document.createElement('input');
             inpFloors.type = 'number';
@@ -725,7 +665,6 @@
             });
             tdFloors.appendChild(inpFloors);
 
-            // 层高
             const tdFloorH = document.createElement('td');
             const inpFloorH = document.createElement('input');
             inpFloorH.type = 'number';
@@ -737,7 +676,6 @@
             });
             tdFloorH.appendChild(inpFloorH);
 
-            // 户/层
             const tdUnits = document.createElement('td');
             const inpUnits = document.createElement('input');
             inpUnits.type = 'number';
@@ -749,18 +687,16 @@
             });
             tdUnits.appendChild(inpUnits);
 
-            // 本小区（isThisCommunity）
             const tdOwn = document.createElement('td');
             const chkOwn = document.createElement('input');
             chkOwn.type = 'checkbox';
-            chkOwn.checked = b.isThisCommunity !== false; // 缺省视为 true
+            chkOwn.checked = b.isThisCommunity !== false;
             chkOwn.addEventListener('change', () => {
                 b.isThisCommunity = !!chkOwn.checked;
             });
             tdOwn.style.textAlign = 'center';
             tdOwn.appendChild(chkOwn);
 
-            // 操作
             const tdOps = document.createElement('td');
             const btnDel = document.createElement('button');
             btnDel.className = 'btn-mini btn-danger';
@@ -785,7 +721,6 @@
         });
     }
 
-    // 应用默认值到所有楼栋
     btnApplyDefaultsAll.addEventListener('click', () => {
         const f = clampInt(parseInt(defFloorsEl.value), 1, 300, 18);
         const h = clampNum(parseFloat(defFloorHeightEl.value), 1, 20, 3);
@@ -796,21 +731,17 @@
         draw();
     });
 
-    // 导出
     document.getElementById('btnExport').addEventListener('click', () => {
         if (buildings.length === 0) {
             alert("没有数据可导出");
             return;
         }
-
-        // 双保险：导出前再次净化每个多边形（不强制把首点加到末尾）
         buildings = buildings.map(b => {
             const eps = 0.75;
             const cleaned = sanitizePolygon(b.points, eps);
             return { ...b, points: cleaned };
         });
 
-        // 计算整体中心作为导出原点（像素坐标系）
         let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
         buildings.forEach(b => {
             b.points.forEach(p => {
@@ -823,13 +754,15 @@
         const centerX = (minX + maxX) / 2;
         const centerY = (minY + maxY) / 2;
 
-        // 小数点后两位
         const round2 = n => Math.round(n * 100) / 100;
+        // 获取填写的纬度，默认为 36.65
+        const lat = parseFloat(projectLatEl.value) || 36.65;
 
         const exportData = {
-            version: 1.5,
+            version: 1.6,
+            latitude: lat, // 新增：导出纬度
             scaleRatio: scaleRatio,
-            origin: { x: centerX, y: centerY }, // 原点保留为像素，按原逻辑
+            origin: { x: centerX, y: centerY },
             buildings: buildings.map(b => {
                 const c = getPolygonCenter(b.points);
                 const cx = (c.x - centerX) * scaleRatio;
@@ -841,8 +774,7 @@
                     floorHeight: b.floorHeight,
                     units: b.units,
                     totalHeight: b.floors * b.floorHeight,
-                    isThisCommunity: b.isThisCommunity !== false, // 缺省 true
-                    // 坐标（米）保留两位小数
+                    isThisCommunity: b.isThisCommunity !== false,
                     shape: b.points.map(p => ({
                         x: round2((p.x - centerX) * scaleRatio),
                         y: round2((p.y - centerY) * scaleRatio)
@@ -861,7 +793,6 @@
         downloadAnchorNode.remove();
     });
 
-    // 工具函数
     function clampInt(v, min, max, fallback) {
         if (Number.isNaN(v)) return fallback;
         return Math.min(Math.max(Math.round(v), min), max);
@@ -871,7 +802,6 @@
         return Math.min(Math.max(v, min), max);
     }
 
-    // 初始：限制默认参数输入
     [defFloorsEl, defFloorHeightEl, defUnitsEl].forEach(el => {
         el.addEventListener('change', () => {
             defFloorsEl.value = clampInt(parseInt(defFloorsEl.value), 1, 300, 18);
@@ -880,7 +810,6 @@
         });
     });
 
-    // 外层分隔条（调整步骤1-4区域高度）
     const topPane = document.getElementById('topPane');
     const bottomPane = document.getElementById('bottomPane');
     const outerResizer = document.getElementById('outerResizer');
@@ -889,11 +818,10 @@
 
     function setTopPaneHeight(px) {
         const sidebar = document.getElementById('sidebar');
-        const minPx = 160; // 至少能看见几个控件
-        const maxPx = Math.max(160, sidebar.clientHeight - 240); // 保证下半部分有空间
+        const minPx = 160; 
+        const maxPx = Math.max(160, sidebar.clientHeight - 240);
         const clamped = Math.max(minPx, Math.min(px, maxPx));
         topPane.style.height = clamped + 'px';
-        // 可能需要同步限制表格高度（当上半部分变大时，下半部分变小）
         clampTableHeightToBottomPane();
     }
 
@@ -925,13 +853,11 @@
         }
     });
 
-    // 内层分隔条（调整表格高度）
     const tableWrapper = document.getElementById('table-wrapper');
     const tableResizer = document.getElementById('tableResizer');
     let innerResize = { active: false, startY: 0, startHeight: 0 };
 
     function tableMaxHeight() {
-        // 给表头/按钮/内边距留出空间
         const reserve = 130;
         return Math.max(120, bottomPane.clientHeight - reserve);
     }
@@ -964,18 +890,14 @@
         setTableHeight(innerResize.startHeight + delta);
     });
 
-    // 初次设置高度（根据 CSS 变量初始值）
     window.addEventListener('load', () => {
-        const initialTop = Math.max(160, Math.min(window.innerHeight * 0.6, window.innerHeight * 0.40));
+        const initialTop = Math.max(160, Math.min(window.innerHeight * 0.6, window.innerHeight * 0.44));
         topPane.style.height = initialTop + 'px';
-
-        const initialTable = Math.max(120, Math.min(window.innerHeight * 0.7, window.innerHeight * 0.32));
+        const initialTable = Math.max(120, Math.min(window.innerHeight * 0.7, window.innerHeight * 0.28));
         tableWrapper.style.height = initialTable + 'px';
-
         clampTableHeightToBottomPane();
     });
 
-    // 窗口变化时，确保高度有效
     window.addEventListener('resize', () => {
         clampTableHeightToBottomPane();
     });
