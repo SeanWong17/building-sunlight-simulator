@@ -25,6 +25,7 @@ open index.html      # 3D 采光可视化
 ```
 
 或者访问在线演示：[Live Demo](https://guanshanyue-daylighting.netlify.app/)
+备用链接：[https://building-sunlight-simulator.pages.dev/]
 
 ## 📖 使用流程
 
