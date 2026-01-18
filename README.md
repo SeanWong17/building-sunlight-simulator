@@ -8,7 +8,7 @@
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/seanwong17/building-sunlight-simulator/pulls)
 [![Made with Three.js](https://img.shields.io/badge/Made%20with-Three.js-000000?logo=three.js)](https://threejs.org/)
 
-[在线演示](https://guanshanyue-daylighting.netlify.app/) · [在线演示备用链接](https://building-sunlight-simulator.pages.dev/) · [问题反馈](https://github.com/seanwong17/building-sunlight-simulator/issues)
+[在线演示](https://seanwong17.github.io/building-sunlight-simulator/) · [在线演示备用链接](https://building-sunlight-simulator.pages.dev/) · [问题反馈](https://github.com/seanwong17/building-sunlight-simulator/issues)
 
 <img src="examples/vis.png" alt="效果预览" width="80%">
 
@@ -50,7 +50,7 @@ Building Sunlight Simulator 是一套**纯前端**的楼盘规划与采光模拟
 
 ### 在线使用
 
-直接访问 [在线演示](https://guanshanyue-daylighting.netlify.app/) 即可体验完整功能。
+直接访问 [在线演示](https://guanshanyue-daylighting.netlify.app/) 即可体验模拟效果。
 
 ### 本地部署
 
