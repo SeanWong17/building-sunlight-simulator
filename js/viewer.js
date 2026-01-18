@@ -536,29 +536,33 @@
             applyVisibilityFilter(true);
         });
 
-        // 移动端折叠面板
+        // 侧边栏收起/展开
         const controlsPanel = document.getElementById('controls');
-        const fabBtn = document.getElementById('fabBtn');
-        const mql = window.matchMedia('(max-width: 600px)');
+        const sidebarToggle = document.getElementById('sidebarToggle');
 
+        // 移动端显示底部时间条 & 默认收起
+        const mql = window.matchMedia('(max-width: 600px)');
         function applyMobileLayout() {
             const dock = document.getElementById('timeDock');
+            dock.style.display = mql.matches ? 'flex' : 'none';
             if (mql.matches) {
-                dock.style.display = 'flex';
-                controlsPanel.setAttribute('data-collapsed', 'true');
-            } else {
-                dock.style.display = 'none';
-                controlsPanel.setAttribute('data-collapsed', 'false');
+                controlsPanel.classList.add('collapsed');
             }
         }
-
-        fabBtn.addEventListener('click', () => {
-            const cur = controlsPanel.getAttribute('data-collapsed') === 'true';
-            controlsPanel.setAttribute('data-collapsed', cur ? 'false' : 'true');
-        });
-
         applyMobileLayout();
         mql.addEventListener('change', applyMobileLayout);
+
+        // 切换按钮点击
+        sidebarToggle.addEventListener('click', () => {
+            controlsPanel.classList.toggle('collapsed');
+        });
+
+        // 移动端点击场景自动收起
+        document.getElementById('canvas-container').addEventListener('click', () => {
+            if (window.innerWidth <= 600) {
+                controlsPanel.classList.add('collapsed');
+            }
+        });
     }
 
     // ========== 动画循环 ==========
