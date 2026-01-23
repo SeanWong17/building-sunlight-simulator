@@ -1,3 +1,7 @@
+<p align="center">
+  <a href="./README_en.md">English</a> | <span>简体中文</span>
+</p>
+
 <div align="center">
 
 # 🏢 Building Sunlight Simulator
