@@ -5,9 +5,9 @@
 **建筑采光模拟工具 · 轻量级楼盘日照分析解决方案**
 
 <p>
-  <a href="https://github.com/ruanyf/weekly">
-    <img src="https://img.shields.io/badge/科技爱好者周刊-第382期推荐-ff69b4?style=flat-square&logo=rss" alt="Tech Enthusiast Weekly">
-  </a>
+    <a href="https://github.com/ruanyf/weekly/blob/master/docs/issue-382.md">
+        <img src="https://img.shields.io/badge/科技爱好者周刊-第382期推荐-ff69b4?style=flat-square&logo=rss" alt="Tech Enthusiast Weekly">
+    </a>
   <a href="https://opensource.org/licenses/MIT">
     <img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License">
   </a>
@@ -164,6 +164,14 @@ git clone [https://github.com/seanwong17/building-sunlight-simulator.git](https:
 ## 📄 License
 
 [MIT License](LICENSE) © 2023 seanwong17
+
+---
+
+## 📈 Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=SeanWong17/building-sunlight-simulator&type=Date)](https://star-history.com/#SeanWong17/building-sunlight-simulator&Date)
+
+---
 
 <div align="center">
   <br>
