@@ -1,5 +1,5 @@
 /**
- * 楼盘采光可视化 - 主逻辑
+ * 楼盘采光可视化 - 主逻辑（含日照分析功能）
  */
 (function() {
     'use strict';
@@ -45,9 +45,16 @@
     const buildingsGroup = new THREE.Group();
     scene.add(buildingsGroup);
 
+    // 热力图层组
+    const heatmapGroup = new THREE.Group();
+    scene.add(heatmapGroup);
+
     // ========== 状态变量 ==========
     let LATITUDE = 36.65;
     let showOwnOnly = false;
+    let currentData = null;
+    let sunlightResults = null; // 存储日照计算结果
+    let showHeatmap = false;
 
     // ========== 纹理与材质工具 ==========
     function createFacadeTexture(floors, unitsPerFloor) {
@@ -203,6 +210,398 @@
         }
     }
 
+    // ========== 日照分析核心功能 ==========
+
+    /**
+     * 找到建筑物的南面（y值最大的边）
+     * 返回南面的两个端点，按从西到东排序
+     */
+    function findSouthFace(shape) {
+        if (shape.length < 3) return null;
+
+        // 找到所有边
+        const edges = [];
+        for (let i = 0; i < shape.length; i++) {
+            const p1 = shape[i];
+            const p2 = shape[(i + 1) % shape.length];
+            const midY = (p1.y + p2.y) / 2;
+            edges.push({ p1, p2, midY });
+        }
+
+        // 找到 y 值最大的边（最南）
+        edges.sort((a, b) => b.midY - a.midY);
+        const southEdge = edges[0];
+
+        // 确保从西到东排序（x 从小到大）
+        let start = southEdge.p1;
+        let end = southEdge.p2;
+        if (start.x > end.x) {
+            [start, end] = [end, start];
+        }
+
+        return { start, end };
+    }
+
+    /**
+     * 计算每户的采光检测点 - 户号改为从东向西
+     */
+    function calculateSamplingPoints(building, buildingIndex) {
+        const points = [];
+        const floors = Math.max(1, parseInt(building.floors || 1, 10));
+        const floorHeight = building.floorHeight || 3;
+        const units = Math.max(1, parseInt(building.units || 1, 10));
+
+        const southFace = findSouthFace(building.shape);
+        if (!southFace) return points;
+
+        const sDx = southFace.end.x - southFace.start.x;
+        const sDy = southFace.end.y - southFace.start.y;
+        const len = Math.sqrt(sDx * sDx + sDy * sDy);
+        
+        // 法向量计算
+        const nx = sDy / len;
+        const ny = -sDx / len;
+
+        for (let floor = 0; floor < floors; floor++) {
+            const windowHeight = floor * floorHeight + floorHeight * 0.4 + 1.2;
+
+            for (let unit = 0; unit < units; unit++) {
+                // t 的计算改为 (units - 1 - unit + 0.5) / units
+                // unit=0 对应 end(东)
+                const t = (units - 1 - unit + 0.5) / units; 
+                
+                const x = southFace.start.x + sDx * t;
+                const y = southFace.start.y + sDy * t;
+
+                points.push({
+                    buildingIndex,
+                    buildingName: building.name || `建筑${buildingIndex + 1}`,
+                    floor: floor + 1,
+                    unit: unit + 1, // 此时 unit 1 对应最东侧
+                    x: x + nx * 0.5,
+                    y: y + Math.abs(ny) * 0.5,
+                    z: windowHeight,
+                    sunlightHours: 0
+                });
+            }
+        }
+        return points;
+    }
+
+    /**
+     * 计算太阳方向向量
+     */
+    function calculateSunDirection(hour, latitude, declination) {
+        const rad = Math.PI / 180;
+        const hAngle = (hour - 12) * 15 * rad;
+        const lat = latitude * rad;
+        const dec = declination * rad;
+
+        const sinAlt = Math.sin(lat) * Math.sin(dec) + Math.cos(lat) * Math.cos(dec) * Math.cos(hAngle);
+        const alt = Math.asin(Math.max(-1, Math.min(1, sinAlt)));
+
+        if (alt <= 0.01) return null; // 太阳在地平线以下或刚好在地平线
+
+        const cosAz = (sinAlt * Math.sin(lat) - Math.sin(dec)) / (Math.cos(alt) * Math.cos(lat));
+        let az = Math.acos(Math.min(1, Math.max(-1, cosAz)));
+        if (hour >= 12) az = -az;
+
+        // 返回指向太阳的方向向量
+        const y = Math.sin(alt);
+        const r = Math.cos(alt);
+        const x = r * Math.sin(az);
+        const z = r * Math.cos(az);
+
+        return new THREE.Vector3(x, y, z).normalize();
+    }
+
+    /**
+     * 收集所有建筑物的mesh用于射线检测
+     */
+    function collectBuildingMeshes() {
+        const meshes = [];
+        buildingsGroup.traverse(obj => {
+            if (obj.isMesh && obj.geometry) {
+                meshes.push(obj);
+            }
+        });
+        return meshes;
+    }
+
+    /**
+     * 检查某点在某时刻是否有日照
+     */
+    function checkSunlight(point, sunDirection, buildingMeshes, raycaster) {
+        if (!sunDirection) return false;
+
+        // 转换坐标：数据中的 (x, y) -> 3D 中的 (x, z)，z 是高度变 y
+        const origin = new THREE.Vector3(point.x, point.z, point.y);
+
+        raycaster.set(origin, sunDirection);
+        raycaster.near = 0.1;
+        raycaster.far = 2000;
+
+        const intersects = raycaster.intersectObjects(buildingMeshes, true);
+        return intersects.length === 0;
+    }
+
+    /**
+     * 执行日照时长计算
+     */
+    async function calculateSunlightDuration(progressCallback) {
+        if (!currentData || !currentData.buildings) {
+            alert('请先导入建筑数据');
+            return null;
+        }
+
+        const declination = parseFloat(document.getElementById('seasonSelect').value);
+        const timeStep = parseFloat(document.getElementById('timeStepSelect').value);
+
+        // 收集本小区建筑的采样点
+        const allPoints = [];
+        currentData.buildings.forEach((b, idx) => {
+            if (b.isThisCommunity) {
+                const points = calculateSamplingPoints(b, idx);
+                allPoints.push(...points);
+            }
+        });
+
+        if (allPoints.length === 0) {
+            alert('没有找到本小区的建筑（isThisCommunity: true）');
+            return null;
+        }
+
+        // 收集用于遮挡检测的建筑物mesh
+        const buildingMeshes = collectBuildingMeshes();
+        const raycaster = new THREE.Raycaster();
+
+        // 计算时间点
+        const timePoints = [];
+        for (let hour = 6; hour <= 18; hour += timeStep) {
+            timePoints.push(hour);
+        }
+
+        const totalSteps = allPoints.length * timePoints.length;
+        let completedSteps = 0;
+
+        // 为了不阻塞UI，使用分批处理
+        const batchSize = 100;
+
+        for (let pointIdx = 0; pointIdx < allPoints.length; pointIdx++) {
+            const point = allPoints[pointIdx];
+
+            for (const hour of timePoints) {
+                const sunDir = calculateSunDirection(hour, LATITUDE, declination);
+                if (sunDir && checkSunlight(point, sunDir, buildingMeshes, raycaster)) {
+                    point.sunlightHours += timeStep;
+                }
+                completedSteps++;
+            }
+
+            // 每处理一定数量的点，更新进度并让出控制权
+            if (pointIdx % 10 === 0) {
+                const progress = completedSteps / totalSteps;
+                if (progressCallback) progressCallback(progress);
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+        }
+
+        // 汇总结果
+        const results = {
+            points: allPoints,
+            declination,
+            latitude: LATITUDE,
+            timeStep,
+            buildings: {}
+        };
+
+        // 按建筑汇总
+        allPoints.forEach(p => {
+            if (!results.buildings[p.buildingName]) {
+                results.buildings[p.buildingName] = {
+                    name: p.buildingName,
+                    units: [],
+                    minHours: Infinity,
+                    maxHours: 0,
+                    avgHours: 0,
+                    totalUnits: 0
+                };
+            }
+            const bldg = results.buildings[p.buildingName];
+            bldg.units.push(p);
+            bldg.minHours = Math.min(bldg.minHours, p.sunlightHours);
+            bldg.maxHours = Math.max(bldg.maxHours, p.sunlightHours);
+            bldg.avgHours += p.sunlightHours;
+            bldg.totalUnits++;
+        });
+
+        // 计算平均值
+        for (const key of Object.keys(results.buildings)) {
+            const b = results.buildings[key];
+            if (b.totalUnits > 0) {
+                b.avgHours = b.avgHours / b.totalUnits;
+            }
+        }
+
+        // 全局统计
+        results.totalUnits = allPoints.length;
+        results.minHours = Math.min(...allPoints.map(p => p.sunlightHours));
+        results.maxHours = Math.max(...allPoints.map(p => p.sunlightHours));
+        results.avgHours = allPoints.reduce((sum, p) => sum + p.sunlightHours, 0) / allPoints.length;
+
+        // 统计不满足标准的户数（冬至日照不足2小时）
+        results.belowStandard = allPoints.filter(p => p.sunlightHours < 2).length;
+
+        return results;
+    }
+
+    /**
+     * 根据日照时长获取颜色
+     */
+    function getSunlightColor(hours, maxHours = 12) {
+        // 使用科学可视化色阶 (类似 viridis/plasma)
+        const t = Math.min(hours / maxHours, 1);
+
+        // 从深蓝(差)到绿(中等)到黄(好)到红(极好)
+        const colors = [
+            { pos: 0, r: 49, g: 54, b: 149 },    // 深蓝 - 0小时
+            { pos: 0.25, r: 69, g: 117, b: 180 }, // 蓝
+            { pos: 0.4, r: 116, g: 173, b: 209 }, // 浅蓝
+            { pos: 0.5, r: 224, g: 243, b: 248 }, // 极浅蓝
+            { pos: 0.6, r: 254, g: 224, b: 144 }, // 浅黄
+            { pos: 0.75, r: 253, g: 174, b: 97 }, // 橙
+            { pos: 0.9, r: 244, g: 109, b: 67 },  // 橙红
+            { pos: 1, r: 165, g: 0, b: 38 }       // 深红 - 12小时
+        ];
+
+        // 找到t所在的区间
+        let lower = colors[0], upper = colors[colors.length - 1];
+        for (let i = 0; i < colors.length - 1; i++) {
+            if (t >= colors[i].pos && t <= colors[i + 1].pos) {
+                lower = colors[i];
+                upper = colors[i + 1];
+                break;
+            }
+        }
+
+        // 线性插值
+        const range = upper.pos - lower.pos;
+        const localT = range > 0 ? (t - lower.pos) / range : 0;
+
+        const r = Math.round(lower.r + (upper.r - lower.r) * localT);
+        const g = Math.round(lower.g + (upper.g - lower.g) * localT);
+        const b = Math.round(lower.b + (upper.b - lower.b) * localT);
+
+        return new THREE.Color(r / 255, g / 255, b / 255);
+    }
+
+    /**
+     * 创建热力图显示层 - 贴在南面墙上（户号从东向西）
+     */
+    function createHeatmapLayer(results) {
+        clearGroup(heatmapGroup);
+        if (!results || !results.points) return;
+
+        const maxHours = 12;
+
+        results.points.forEach(point => {
+            const building = currentData.buildings[point.buildingIndex];
+            if (!building) return;
+
+            const floorHeight = building.floorHeight || 3;
+            const units = building.units || 1;
+            const southFace = findSouthFace(building.shape);
+            if (!southFace) return;
+
+            const startX = southFace.start.x;
+            const startY = southFace.start.y;
+            const endX = southFace.end.x;
+            const endY = southFace.end.y;
+            const dx = endX - startX;
+            const dy = endY - startY;
+            const faceLength = Math.sqrt(dx * dx + dy * dy);
+
+            const unitWidth = faceLength / units;
+            const cellWidth = unitWidth * 0.95;
+            const cellHeight = floorHeight * 0.9;
+
+            const geometry = new THREE.PlaneGeometry(cellWidth, cellHeight);
+            const color = getSunlightColor(point.sunlightHours, maxHours);
+            const material = new THREE.MeshBasicMaterial({
+                color: color,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.85,
+                depthTest: true,
+                polygonOffset: true,
+                polygonOffsetFactor: -1,
+                polygonOffsetUnits: -1
+            });
+
+            const mesh = new THREE.Mesh(geometry, material);
+
+            // 计算位置时的 t 也要反向，以匹配 point.unit
+            const t = (units - point.unit + 0.5) / units;
+
+            const wallDataX = startX + dx * t;
+            const wallDataY = startY + dy * t;
+            const wallHeight = (point.floor - 0.5) * floorHeight;
+
+            const normalX = -dy / faceLength;
+            const normalZ = dx / faceLength;
+            const offset = 0.3;
+
+            mesh.position.set(wallDataX + normalX * offset, wallHeight, wallDataY + normalZ * offset);
+            mesh.lookAt(wallDataX + normalX * 100, wallHeight, wallDataY + normalZ * 100);
+
+            mesh.userData = {
+                type: 'heatmapCell',
+                buildingName: point.buildingName,
+                floor: point.floor,
+                unit: point.unit,
+                sunlightHours: point.sunlightHours
+            };
+
+            heatmapGroup.add(mesh);
+        });
+    }
+
+    /**
+     * 显示/隐藏热力图
+     */
+    function toggleHeatmap(show) {
+        showHeatmap = show;
+        heatmapGroup.visible = show;
+
+        if (show && sunlightResults) {
+            createHeatmapLayer(sunlightResults);
+        }
+    }
+
+    /**
+     * 显示日照统计结果
+     */
+    function showSunlightStats(results) {
+        const statsDiv = document.getElementById('sunlightStats');
+        if (!statsDiv || !results) return;
+
+        const seasonName = {
+            '-23.44': '冬至',
+            '0': '春/秋分',
+            '23.44': '夏至'
+        }[results.declination.toString()] || '自定义';
+
+        let html = `
+            <div class="stat-row">
+                <span class="stat-label">分析日期</span>
+                <span class="stat-value">${seasonName}</span>
+            </div>
+        `;
+
+        statsDiv.innerHTML = html;
+        statsDiv.style.display = 'block';
+    }
+
     // ========== 城市/纬度选择器初始化 ==========
     function initLocationSelector() {
         const citySelect = document.getElementById('citySelect');
@@ -222,6 +621,8 @@
                 latInput.value = LATITUDE;
                 updateSun();
                 updateLatDisplay();
+                // 清除之前的计算结果
+                clearSunlightResults();
             }
         });
 
@@ -231,8 +632,8 @@
                 LATITUDE = inputLat;
                 updateSun();
                 updateLatDisplay();
+                clearSunlightResults();
 
-                // 尝试匹配城市
                 let matched = false;
                 for (const option of citySelect.options) {
                     if (option.dataset.lat && Math.abs(parseFloat(option.dataset.lat) - inputLat) < 0.01) {
@@ -258,6 +659,15 @@
         }
     }
 
+    function clearSunlightResults() {
+        sunlightResults = null;
+        clearGroup(heatmapGroup);
+        document.getElementById('toggleHeatmap').checked = false;
+        document.getElementById('toggleHeatmap').disabled = true;
+        document.getElementById('heatmapLegend').style.display = 'none';
+        document.getElementById('sunlightStats').style.display = 'none';
+    }
+
     // ========== 加载楼栋数据 ==========
     const jsonInput = document.getElementById('jsonInput');
 
@@ -273,7 +683,6 @@
                     document.getElementById('latitudeInput').value = LATITUDE;
                     updateLatDisplay();
 
-                    // 尝试匹配城市
                     const citySelect = document.getElementById('citySelect');
                     let matched = false;
                     for (const option of citySelect.options) {
@@ -287,7 +696,9 @@
                         citySelect.value = '';
                     }
                 }
+                currentData = data;
                 loadBuildings(data);
+                clearSunlightResults();
                 document.getElementById('empty-state').style.display = 'none';
             } catch (err) {
                 alert('JSON 解析失败，请检查文件格式');
@@ -315,7 +726,7 @@
 
         if (!data || !Array.isArray(data.buildings) || data.buildings.length === 0) return;
 
-        data.buildings.forEach(b => {
+        data.buildings.forEach((b, index) => {
             if (!b.shape || b.shape.length < 3) return;
 
             const shape = new THREE.Shape();
@@ -346,7 +757,7 @@
             const own = (typeof b.isThisCommunity === 'boolean') ? b.isThisCommunity : true;
 
             const node = new THREE.Group();
-            node.userData = { own, name: b.name || '' };
+            node.userData = { own, name: b.name || '', buildingIndex: index };
             buildingsGroup.add(node);
 
             let mesh;
@@ -372,6 +783,7 @@
             mesh.rotation.x = -Math.PI / 2;
             mesh.castShadow = true;
             mesh.receiveShadow = true;
+            mesh.userData.buildingIndex = index;
             node.add(mesh);
 
             const edgesColor = own ? 0x435061 : 0x7c8896;
@@ -515,9 +927,87 @@
         sunLight.intensity = alt > 0 ? 1.2 : 0.0;
     }
 
+    // ========== 点击交互 ==========
+    const raycasterClick = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    function onCanvasClick(event) {
+        if (!sunlightResults || !showHeatmap) return;
+
+        const rect = renderer.domElement.getBoundingClientRect();
+        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+        raycasterClick.setFromCamera(mouse, camera);
+        const intersects = raycasterClick.intersectObjects(heatmapGroup.children, false);
+
+        if (intersects.length > 0) {
+            const obj = intersects[0].object;
+            if (obj.userData.type === 'heatmapCell') {
+                showUnitInfo(obj.userData);
+            }
+        }
+    }
+
+    /**
+     * 更新信息面板文字
+     */
+    function showUnitInfo(data) {
+        const panel = document.getElementById('unitInfoPanel');
+        const content = document.getElementById('unitInfoContent');
+        const title = document.getElementById('unitInfoTitle');
+
+        title.textContent = `${data.buildingName}`;
+
+        const hours = data.sunlightHours;
+        const maxHours = 12;
+        const percent = Math.min(hours / maxHours * 100, 100);
+        const color = getSunlightColor(hours, maxHours);
+        const colorHex = '#' + color.getHexString();
+
+        let statusText = '良好';
+        let statusClass = 'good';
+        if (hours < 2) {
+            statusText = '不达标';
+            statusClass = 'bad';
+        } else if (hours < 3) {
+            statusText = '偏少';
+            statusClass = 'warning';
+        }
+
+        content.innerHTML = `
+            <div class="info-row">
+                <span class="info-label">楼层</span>
+                <span class="info-value">${data.floor} 层</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">户号</span>
+                <span class="info-value">第 ${data.unit} 户(从东向西)</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">日照时长</span>
+                <span class="info-value" style="color: ${colorHex}">${hours.toFixed(1)} 小时</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">日照状态</span>
+                <span class="info-value ${statusClass}">${statusText}</span>
+            </div>
+            <div class="sunlight-bar">
+                <div class="sunlight-fill" style="width: ${percent}%; background: ${colorHex};"></div>
+                <span class="sunlight-text">${hours.toFixed(1)}h / 12h</span>
+            </div>
+        `;
+
+        panel.style.display = 'block';
+    }
+
     // ========== UI 绑定 ==========
     function bindUI() {
-        document.getElementById('seasonSelect').addEventListener('change', updateSun);
+        document.getElementById('seasonSelect').addEventListener('change', () => {
+            updateSun();
+            clearSunlightResults();
+        });
+
         document.getElementById('timeSlider').addEventListener('input', (e) => {
             setHour(e.target.value);
             updateSun();
@@ -536,11 +1026,61 @@
             applyVisibilityFilter(true);
         });
 
+        // 日照分析按钮
+        document.getElementById('calcSunlightBtn').addEventListener('click', async () => {
+            const btn = document.getElementById('calcSunlightBtn');
+            const progress = document.getElementById('calcProgress');
+            const progressFill = document.getElementById('progressFill');
+            const progressText = document.getElementById('progressText');
+
+            btn.disabled = true;
+            progress.style.display = 'block';
+
+            try {
+                sunlightResults = await calculateSunlightDuration((p) => {
+                    const pct = Math.round(p * 100);
+                    progressFill.style.width = pct + '%';
+                    progressText.textContent = `计算中... ${pct}%`;
+                });
+
+                if (sunlightResults) {
+                    progressText.textContent = '计算完成！';
+                    document.getElementById('toggleHeatmap').disabled = false;
+                    document.getElementById('heatmapLegend').style.display = 'block';
+                    showSunlightStats(sunlightResults);
+
+                    // 自动显示热力图
+                    document.getElementById('toggleHeatmap').checked = true;
+                    toggleHeatmap(true);
+                }
+            } catch (err) {
+                console.error('日照计算错误:', err);
+                alert('计算过程中出错，请重试');
+            }
+
+            btn.disabled = false;
+            setTimeout(() => {
+                progress.style.display = 'none';
+            }, 1500);
+        });
+
+        // 热力图开关
+        document.getElementById('toggleHeatmap').addEventListener('change', (e) => {
+            toggleHeatmap(e.target.checked);
+        });
+
+        // 关闭户型信息面板
+        document.getElementById('closeUnitInfo').addEventListener('click', () => {
+            document.getElementById('unitInfoPanel').style.display = 'none';
+        });
+
+        // 点击画布
+        renderer.domElement.addEventListener('click', onCanvasClick);
+
         // 侧边栏收起/展开
         const controlsPanel = document.getElementById('controls');
         const sidebarToggle = document.getElementById('sidebarToggle');
 
-        // 移动端显示底部时间条 & 默认收起
         const mql = window.matchMedia('(max-width: 600px)');
         function applyMobileLayout() {
             const dock = document.getElementById('timeDock');
@@ -552,15 +1092,13 @@
         applyMobileLayout();
         mql.addEventListener('change', applyMobileLayout);
 
-        // 切换按钮点击
         sidebarToggle.addEventListener('click', () => {
             controlsPanel.classList.toggle('collapsed');
         });
 
-        // 移动端点击场景自动收起
-        document.getElementById('canvas-container').addEventListener('click', () => {
-            if (window.innerWidth <= 600) {
-                controlsPanel.classList.add('collapsed');
+        document.getElementById('canvas-container').addEventListener('click', (e) => {
+            if (window.innerWidth <= 600 && e.target === renderer.domElement) {
+                // 只在点击空白处时收起
             }
         });
     }
@@ -590,6 +1128,7 @@
     // 尝试加载默认数据
     if (typeof DEFAULT_DATA !== 'undefined') {
         console.log('检测到默认数据，正在加载...');
+        currentData = DEFAULT_DATA;
         loadBuildings(DEFAULT_DATA);
         document.getElementById('empty-state').style.display = 'none';
     } else {
