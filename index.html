@@ -73,6 +73,39 @@
                 <div class="time-display" id="timeText">10:00</div>
             </div>
 
+            <!-- 日照分析功能 -->
+            <div class="control-group sunlight-analysis">
+                <label>4. 日照分析</label>
+                <div class="analysis-config">
+                    <div class="inline-row">
+                        <span>时间间隔</span>
+                        <select id="timeStepSelect">
+                            <option value="0.25">15分钟（推荐）</option>
+                            <option value="0.5">30分钟（快速）</option>
+                            <option value="0.1">6分钟（精确）</option>
+                        </select>
+                    </div>
+                    <button id="calcSunlightBtn" class="calc-btn">🔬 计算日照时长</button>
+                    <div id="calcProgress" class="calc-progress" style="display:none;">
+                        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+                        <span id="progressText">计算中...</span>
+                    </div>
+                    <div class="inline-row" style="margin-top: 10px;">
+                        <input type="checkbox" id="toggleHeatmap" disabled>
+                        <span>显示日照热力图</span>
+                    </div>
+                    <div id="heatmapLegend" class="heatmap-legend" style="display:none;">
+                        <div class="legend-bar"></div>
+                        <div class="legend-labels">
+                            <span>0h</span>
+                            <span>6h</span>
+                            <span>12h</span>
+                        </div>
+                    </div>
+                    <div id="sunlightStats" class="sunlight-stats" style="display:none;"></div>
+                </div>
+            </div>
+
             <div class="legend">
                 <span>💡 提示: 拖动查看阴影变化</span>
             </div>
@@ -92,6 +125,15 @@
             <path d="M50 10 L60 50 L50 50 L40 50 Z" fill="red"/>
             <text x="50" y="25" font-family="Arial" font-size="14" font-weight="bold" fill="red" text-anchor="middle">N</text>
         </svg>
+    </div>
+
+    <!-- 点击建筑物时显示的信息面板 -->
+    <div id="unitInfoPanel" class="unit-info-panel" style="display:none;">
+        <div class="unit-info-header">
+            <span id="unitInfoTitle">户型信息</span>
+            <button id="closeUnitInfo">×</button>
+        </div>
+        <div id="unitInfoContent"></div>
     </div>
 
     <div id="canvas-container" aria-label="3D canvas"></div>

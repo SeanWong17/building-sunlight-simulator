@@ -32,12 +32,17 @@ body {
     max-width: calc(100vw - 32px);
     background: var(--ui-bg);
     padding: 16px;
+    padding-top: 52px;
     border-radius: var(--radius);
     box-shadow: 0 6px 24px rgba(0, 0, 0, 0.15);
     z-index: 10;
     backdrop-filter: saturate(180%) blur(8px);
-    transition: transform .25s ease, opacity .2s ease, height .25s ease, width .25s ease;
-    max-height: 90vh;
+    transition: width .3s ease, height .3s ease, padding .3s ease;
+    overflow: hidden;
+}
+
+.panel-content {
+    max-height: calc(90vh - 80px);
     overflow-y: auto;
 }
 
@@ -187,6 +192,241 @@ h2 {
     accent-color: var(--brand);
 }
 
+/* 日照分析样式 */
+.sunlight-analysis .analysis-config {
+    background: #fff8e6;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #f0d878;
+}
+
+.sunlight-analysis .inline-row span:first-of-type {
+    font-size: 12px;
+    color: #666;
+    min-width: 60px;
+}
+
+.sunlight-analysis .inline-row select {
+    flex: 1;
+    padding: 6px 8px;
+    font-size: 13px;
+}
+
+.calc-btn {
+    width: 100%;
+    padding: 12px;
+    margin-top: 10px;
+    background: linear-gradient(135deg, #ff9500, #ff6b00);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+    transition: all 0.2s;
+    box-shadow: 0 2px 8px rgba(255, 107, 0, 0.3);
+}
+
+.calc-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #ffaa22, #ff7711);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(255, 107, 0, 0.4);
+}
+
+.calc-btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.calc-progress {
+    margin-top: 10px;
+    text-align: center;
+}
+
+.progress-bar {
+    height: 8px;
+    background: #e0e0e0;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 6px;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #4caf50, #8bc34a);
+    width: 0%;
+    transition: width 0.3s ease;
+}
+
+#progressText {
+    font-size: 12px;
+    color: #666;
+}
+
+/* 热力图图例 */
+.heatmap-legend {
+    margin-top: 12px;
+    padding: 10px;
+    background: #fff;
+    border-radius: 6px;
+}
+
+.legend-bar {
+    height: 16px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, 
+        #313695, #4575b4, #74add1, #abd9e9, 
+        #e0f3f8, #ffffbf, #fee090, #fdae61, 
+        #f46d43, #d73027, #a50026);
+}
+
+.legend-labels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 4px;
+    font-size: 11px;
+    color: #666;
+}
+
+/* 日照统计 */
+.sunlight-stats {
+    margin-top: 12px;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.sunlight-stats .stat-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    border-bottom: 1px dashed #e0e0e0;
+}
+
+.sunlight-stats .stat-row:last-child {
+    border-bottom: none;
+}
+
+.sunlight-stats .stat-label {
+    color: #666;
+}
+
+.sunlight-stats .stat-value {
+    font-weight: 600;
+    color: #333;
+}
+
+.sunlight-stats .stat-value.good {
+    color: #28a745;
+}
+
+.sunlight-stats .stat-value.warning {
+    color: #ffc107;
+}
+
+.sunlight-stats .stat-value.bad {
+    color: #dc3545;
+}
+
+/* 户型信息面板 */
+.unit-info-panel {
+    position: absolute;
+    left: 16px;
+    bottom: 16px;
+    width: 280px;
+    background: var(--ui-bg);
+    border-radius: var(--radius);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.15);
+    z-index: 15;
+    backdrop-filter: saturate(180%) blur(8px);
+    overflow: hidden;
+}
+
+.unit-info-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+}
+
+.unit-info-header span {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.unit-info-header button {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+}
+
+.unit-info-header button:hover {
+    opacity: 1;
+}
+
+#unitInfoContent {
+    padding: 16px;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+#unitInfoContent .info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid #eee;
+}
+
+#unitInfoContent .info-row:last-child {
+    border-bottom: none;
+}
+
+#unitInfoContent .info-label {
+    color: #666;
+}
+
+#unitInfoContent .info-value {
+    font-weight: 600;
+    color: #333;
+}
+
+#unitInfoContent .sunlight-bar {
+    margin-top: 10px;
+    height: 24px;
+    background: #e0e0e0;
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+}
+
+#unitInfoContent .sunlight-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.3s;
+}
+
+#unitInfoContent .sunlight-text {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 12px;
+    font-weight: 600;
+    color: #333;
+    text-shadow: 0 0 3px white;
+}
+
 /* 指南针 */
 #compass {
     position: absolute;
@@ -221,130 +461,7 @@ h2 {
     color: #666;
 }
 
-/* 移动端适配 */
-@media (max-width: 600px) {
-    #controls {
-        top: env(safe-area-inset-top, 8px);
-        right: 8px;
-        width: 280px;
-        padding: 12px;
-        border-radius: 14px;
-    }
-
-    #timeBlock {
-        display: none;
-    }
-
-    #controls[data-collapsed="true"] {
-        width: 54px;
-        height: 54px;
-        padding: 0;
-        border-radius: 50%;
-        display: grid;
-        place-items: center;
-    }
-
-    #controls[data-collapsed="true"] .panel-content {
-        display: none;
-    }
-
-    #controls[data-collapsed="true"] .fab {
-        display: grid;
-    }
-
-    #controls[data-collapsed="false"] .panel-content {
-        display: block;
-    }
-
-    #controls[data-collapsed="false"] .fab {
-        display: none;
-    }
-
-    .fab {
-        display: none;
-        width: 54px;
-        height: 54px;
-        border-radius: 50%;
-        background: var(--ui-bg);
-        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.2);
-        color: var(--brand);
-        font-weight: 900;
-        place-items: center;
-        user-select: none;
-        cursor: pointer;
-    }
-
-    /* 底部时间条 */
-    #timeDock {
-        position: absolute;
-        left: 10px;
-        right: 10px;
-        bottom: env(safe-area-inset-bottom, 10px);
-        height: 56px;
-        background: var(--ui-bg);
-        border-radius: 14px;
-        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 8px 12px;
-        z-index: 12;
-        backdrop-filter: saturate(180%) blur(8px);
-    }
-
-    #timeDock .timeLabel {
-        font-size: 13px;
-        color: #3b3f46;
-        font-weight: 700;
-        white-space: nowrap;
-    }
-
-    #timeDock input[type="range"] {
-        flex: 1;
-        height: 28px;
-        accent-color: var(--brand);
-    }
-
-    #timeDock .timeValue {
-        width: 64px;
-        text-align: right;
-        font-weight: 800;
-        color: var(--brand);
-    }
-
-    #compass {
-        width: 64px;
-        height: 64px;
-        bottom: calc(env(safe-area-inset-bottom, 16px) + 56px);
-        right: 12px;
-    }
-}
-
-/* 控制面板 */
-#controls {
-    position: absolute;
-    top: 16px;
-    right: 16px;
-    width: 340px;
-    max-width: calc(100vw - 32px);
-    background: var(--ui-bg);
-    padding: 16px;
-    padding-top: 52px; /* 给按钮留出空间 */
-    border-radius: var(--radius);
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.15);
-    z-index: 10;
-    backdrop-filter: saturate(180%) blur(8px);
-    transition: width .3s ease, height .3s ease, padding .3s ease;
-    overflow: hidden;
-}
-
-.panel-content {
-    max-height: calc(90vh - 80px);
-    overflow-y: auto;
-    transition: opacity .2s ease;
-}
-
-/* 切换按钮 - 框内左上角 */
+/* 切换按钮 */
 .sidebar-toggle {
     position: absolute;
     left: 12px;
@@ -449,5 +566,12 @@ h2 {
         height: 64px;
         bottom: calc(env(safe-area-inset-bottom, 16px) + 56px);
         right: 12px;
+    }
+
+    .unit-info-panel {
+        left: 8px;
+        right: 8px;
+        bottom: calc(env(safe-area-inset-bottom, 10px) + 66px);
+        width: auto;
     }
 }

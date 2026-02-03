@@ -53,7 +53,14 @@ It allows users to draw building outlines directly over a floor plan image (JPG/
 | **Editor** | Converts 2D plans to 3D models. Supports outline drawing, floor height settings, and scale calibration. |
 | **Calculation** | Uses spherical trigonometry for solar paths. Built-in latitude data for 50+ major cities. |
 | **Visuals** | High-precision 4096px shadow maps. Real-time adjustments for Winter/Summer Solstice & Equinoxes (06:00-18:00). |
+| **Quantification** | **New** Calculates sunlight duration per household with heatmap visualization and interactive queries. |
 | **Interaction** | Supports PC mouse and mobile touch controls. Features filtering for non-target buildings. |
+
+### 📊 Quantified Sunlight Analysis
+* **Detection Point Generation**: For target buildings (`isThisCommunity: true`), detection points are generated on the south facade based on floor and unit counts. Points are located at the center of the south window (1.2m above floor level).
+* **Duration Calculation**: Performs raycasting from 06:00 to 18:00 at selectable intervals (15/30/6 mins). If the ray towards the sun is unobstructed, the time is accumulated.
+* **Heatmap Visualization**: Displays color-coded tiles on south-facing windows upon calculation completion. Colors range from Deep Blue (0h) to Deep Red (12h).
+* **Interaction**: Click on any unit's heatmap tile to view detailed sunlight data.
 
 ---
 
@@ -108,6 +115,7 @@ Open `index.html` for 3D visualization and analysis.
 1.  **Import Data**: Click the button to load the JSON file exported in Step 1 (or use `examples/sample.json` in the repo for testing).
 2.  **Adjust Environment**: Select a preset city or manually enter latitude; switch dates (Winter/Summer Solstice).
 3.  **Observe Shadows**: Drag the time slider to observe sunlight occlusion on the target floors throughout the day.
+4.  **Quantified Analysis**: Click to calculate sunlight duration and view the heatmap and specific unit data.
 
 ---
 
@@ -161,7 +169,6 @@ The project uses JSON to transfer building data. `examples/sample.json` provides
 Issues and Pull Requests are welcome!
 
 * **Issues**: [Bug reports & Feature requests](https://github.com/seanwong17/building-sunlight-simulator/issues)
-* **TODOs**: Custom date picker, Sunlight duration statistics export, DXF import support.
 
 ---
 
