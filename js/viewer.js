@@ -6,8 +6,8 @@
 
     // ========== 场景初始化 ==========
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xe6f3ff);
-    scene.fog = new THREE.Fog(0xe6f3ff, 120, 1500);
+    scene.background = new THREE.Color(CONFIG.SCENE.BACKGROUND_COLOR);
+    scene.fog = new THREE.Fog(CONFIG.SCENE.FOG_COLOR, CONFIG.SCENE.FOG_NEAR, CONFIG.SCENE.FOG_FAR);
 
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 5000);
     camera.position.set(200, 260, 320);
@@ -25,7 +25,11 @@
 
     // 地面
     const planeGeometry = new THREE.PlaneGeometry(4000, 4000);
-    const planeMaterial = new THREE.MeshStandardMaterial({ color: 0xdfe6ee, roughness: 0.95, metalness: 0.0 });
+    const planeMaterial = new THREE.MeshStandardMaterial({ 
+        color: CONFIG.MATERIALS.GROUND_COLOR, 
+        roughness: 0.95, 
+        metalness: 0.0 
+    });
     const plane = new THREE.Mesh(planeGeometry, planeMaterial);
     plane.rotation.x = -Math.PI / 2;
     plane.receiveShadow = true;
@@ -35,11 +39,127 @@
     const gridHelper = new THREE.GridHelper(2000, 100, 0xcfd8e3, 0xe9eff5);
     scene.add(gridHelper);
 
-    // 北向箭头
-    const northDir = new THREE.Vector3(0, 0, -1);
-    const northOrigin = new THREE.Vector3(0, 1, 180);
-    const arrowHelper = new THREE.ArrowHelper(northDir, northOrigin, 24, 0xff3b30, 10, 5);
-    scene.add(arrowHelper);
+    // 创建罗盘指南针
+    function createCompass() {
+        const compassGroup = new THREE.Group();
+        
+        // 罗盘底座 - 圆形平台
+        const baseGeometry = new THREE.CylinderGeometry(20, 20, 0.5, 32);
+        const baseMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0xffffff, 
+            roughness: 0.3, 
+            metalness: 0.1 
+        });
+        const base = new THREE.Mesh(baseGeometry, baseMaterial);
+        base.position.y = 0.25;
+        compassGroup.add(base);
+        
+        // 罗盘刻度盘
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+        
+        // 背景
+        ctx.fillStyle = '#f8f9fa';
+        ctx.beginPath();
+        ctx.arc(256, 256, 256, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // 外圈
+        ctx.strokeStyle = '#2c3e50';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(256, 256, 250, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // 刻度和方位
+        const directions = [
+            { angle: 0, label: 'N', color: '#e74c3c', size: 48 },
+            { angle: 90, label: 'E', color: '#34495e', size: 36 },
+            { angle: 180, label: 'S', color: '#34495e', size: 36 },
+            { angle: 270, label: 'W', color: '#34495e', size: 36 }
+        ];
+        
+        // 绘制刻度
+        for (let i = 0; i < 360; i += 10) {
+            const angle = (i - 90) * Math.PI / 180;
+            const isMain = i % 30 === 0;
+            const length = isMain ? 30 : 15;
+            const width = isMain ? 3 : 1;
+            
+            const x1 = 256 + Math.cos(angle) * 220;
+            const y1 = 256 + Math.sin(angle) * 220;
+            const x2 = 256 + Math.cos(angle) * (220 - length);
+            const y2 = 256 + Math.sin(angle) * (220 - length);
+            
+            ctx.strokeStyle = '#34495e';
+            ctx.lineWidth = width;
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+        }
+        
+        // 绘制方位文字
+        directions.forEach(dir => {
+            const angle = (dir.angle - 90) * Math.PI / 180;
+            const x = 256 + Math.cos(angle) * 170;
+            const y = 256 + Math.sin(angle) * 170;
+            
+            ctx.fillStyle = dir.color;
+            ctx.font = `bold ${dir.size}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(dir.label, x, y);
+        });
+        
+        // 中心装饰
+        ctx.fillStyle = '#34495e';
+        ctx.beginPath();
+        ctx.arc(256, 256, 15, 0, Math.PI * 2);
+        ctx.fill();
+        
+        const texture = new THREE.CanvasTexture(canvas);
+        const discGeometry = new THREE.CircleGeometry(19.5, 64);
+        const discMaterial = new THREE.MeshStandardMaterial({ 
+            map: texture, 
+            roughness: 0.4,
+            metalness: 0.1
+        });
+        const disc = new THREE.Mesh(discGeometry, discMaterial);
+        disc.rotation.x = -Math.PI / 2;
+        disc.position.y = 0.6;
+        compassGroup.add(disc);
+        
+        // 指北针 - 红色箭头
+        const arrowShape = new THREE.Shape();
+        arrowShape.moveTo(0, 12);
+        arrowShape.lineTo(-2, 0);
+        arrowShape.lineTo(0, -1);
+        arrowShape.lineTo(2, 0);
+        arrowShape.closePath();
+        
+        const arrowGeometry = new THREE.ExtrudeGeometry(arrowShape, {
+            depth: 1,
+            bevelEnabled: false
+        });
+        const arrowMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0xe74c3c,
+            roughness: 0.3,
+            metalness: 0.2
+        });
+        const arrow = new THREE.Mesh(arrowGeometry, arrowMaterial);
+        arrow.rotation.x = -Math.PI / 2;
+        arrow.position.y = 1.2;
+        compassGroup.add(arrow);
+        
+        compassGroup.position.set(0, 0.5, 180);
+        return compassGroup;
+    }
+
+    const compass = createCompass();
+    scene.add(compass);
 
     // 楼栋组
     const buildingsGroup = new THREE.Group();
@@ -55,6 +175,7 @@
     let currentData = null;
     let sunlightResults = null; // 存储日照计算结果
     let showHeatmap = false;
+    let customDeclination = null; // 存储自定义日期的赤纬角
 
     // ========== 纹理与材质工具 ==========
     function createFacadeTexture(floors, unitsPerFloor) {
@@ -106,7 +227,11 @@
         return tex;
     }
 
-    const roofMaterial = new THREE.MeshStandardMaterial({ color: 0xf5f7fa, roughness: 0.9, metalness: 0.0 });
+    const roofMaterial = new THREE.MeshStandardMaterial({ 
+        color: CONFIG.MATERIALS.ROOF_COLOR, 
+        roughness: 0.9, 
+        metalness: 0.0 
+    });
 
     function createEdgeLines(geometry, color = 0x435061, opacity = 0.5) {
         const edges = new THREE.EdgesGeometry(geometry, 15);
@@ -350,12 +475,18 @@
      */
     async function calculateSunlightDuration(progressCallback) {
         if (!currentData || !currentData.buildings) {
-            alert('请先导入建筑数据');
+            alert(i18n.t('viewer.errorNoData'));
             return null;
         }
 
-        const declination = parseFloat(document.getElementById('seasonSelect').value);
-        const timeStep = parseFloat(document.getElementById('timeStepSelect').value);
+        let declination = parseFloat(document.getElementById('seasonSelect').value);
+        
+        // 如果选择了自定义日期，使用计算出的赤纬角
+        if (declination === 'custom' || isNaN(declination)) {
+            declination = customDeclination || 0;
+        }
+        
+        const timeStep = CONFIG.SUNLIGHT_ANALYSIS.TIME_INTERVAL; // 固定6分钟间隔
 
         // 收集本小区建筑的采样点
         const allPoints = [];
@@ -367,7 +498,7 @@
         });
 
         if (allPoints.length === 0) {
-            alert('没有找到本小区的建筑（isThisCommunity: true）');
+            alert(i18n.t('viewer.errorNoBuilding'));
             return null;
         }
 
@@ -458,20 +589,20 @@
     /**
      * 根据日照时长获取颜色
      */
-    function getSunlightColor(hours, maxHours = 12) {
-        // 使用科学可视化色阶 (类似 viridis/plasma)
-        const t = Math.min(hours / maxHours, 1);
+    function getSunlightColor(hours, maxHours = 8) {
+        // 限制在最大值，超过8小时的都显示为最优颜色
+        const clampedHours = Math.min(hours, maxHours);
+        const t = clampedHours / maxHours;
 
-        // 从深蓝(差)到绿(中等)到黄(好)到红(极好)
+        // 使用温暖色系：从淡黄色到深橙色
         const colors = [
-            { pos: 0, r: 49, g: 54, b: 149 },    // 深蓝 - 0小时
-            { pos: 0.25, r: 69, g: 117, b: 180 }, // 蓝
-            { pos: 0.4, r: 116, g: 173, b: 209 }, // 浅蓝
-            { pos: 0.5, r: 224, g: 243, b: 248 }, // 极浅蓝
-            { pos: 0.6, r: 254, g: 224, b: 144 }, // 浅黄
-            { pos: 0.75, r: 253, g: 174, b: 97 }, // 橙
-            { pos: 0.9, r: 244, g: 109, b: 67 },  // 橙红
-            { pos: 1, r: 165, g: 0, b: 38 }       // 深红 - 12小时
+            { pos: 0, r: 255, g: 250, b: 205 },   // 淡黄色 - 0小时 (LemonChiffon)
+            { pos: 0.2, r: 255, g: 239, b: 170 }, // 浅黄色
+            { pos: 0.35, r: 255, g: 223, b: 130 }, // 金黄色
+            { pos: 0.5, r: 255, g: 200, b: 90 },  // 橙黄色
+            { pos: 0.65, r: 255, g: 170, b: 60 }, // 浅橙色
+            { pos: 0.8, r: 245, g: 140, b: 40 },  // 橙色
+            { pos: 1, r: 220, g: 100, b: 20 }     // 深橙色 - 8小时及以上
         ];
 
         // 找到t所在的区间
@@ -502,7 +633,7 @@
         clearGroup(heatmapGroup);
         if (!results || !results.points) return;
 
-        const maxHours = 12;
+        const maxHours = CONFIG.SUNLIGHT_ANALYSIS.MAX_HOURS; // 使用配置的8小时
 
         results.points.forEach(point => {
             const building = currentData.buildings[point.buildingIndex];
@@ -701,7 +832,7 @@
                 clearSunlightResults();
                 document.getElementById('empty-state').style.display = 'none';
             } catch (err) {
-                alert('JSON 解析失败，请检查文件格式');
+                alert(i18n.t('viewer.errorParseFailed'));
                 console.error(err);
             }
         };
@@ -765,14 +896,14 @@
                 const sideTexture = createFacadeTexture(floors, unitsPerFloor);
                 const sideMaterial = new THREE.MeshStandardMaterial({
                     map: sideTexture,
-                    color: 0x9fb0c4,
-                    roughness: 0.7,
+                    color: CONFIG.MATERIALS.BUILDING_COLOR,
+                    roughness: CONFIG.MATERIALS.BUILDING_ROUGHNESS,
                     metalness: 0.05
                 });
                 mesh = new THREE.Mesh(geometry, [roofMaterial, sideMaterial]);
             } else {
                 const neighborMaterial = new THREE.MeshStandardMaterial({
-                    color: 0xb7c2cf,
+                    color: CONFIG.MATERIALS.NEIGHBOR_COLOR,
                     roughness: 0.95,
                     metalness: 0.0,
                     transparent: true,
@@ -858,11 +989,11 @@
     }
 
     // ========== 光照 ==========
-    const sunLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    const sunLight = new THREE.DirectionalLight(0xffffff, CONFIG.LIGHTING.SUN_INTENSITY);
     sunLight.castShadow = true;
-    sunLight.shadow.mapSize.width = 4096;
-    sunLight.shadow.mapSize.height = 4096;
-    sunLight.shadow.bias = -0.0001;
+    sunLight.shadow.mapSize.width = CONFIG.LIGHTING.SHADOW_MAP_SIZE;
+    sunLight.shadow.mapSize.height = CONFIG.LIGHTING.SHADOW_MAP_SIZE;
+    sunLight.shadow.bias = CONFIG.LIGHTING.SHADOW_BIAS;
     const d = 500;
     sunLight.shadow.camera.left = -d;
     sunLight.shadow.camera.right = d;
@@ -871,7 +1002,9 @@
     sunLight.shadow.camera.near = 1;
     sunLight.shadow.camera.far = 2000;
     scene.add(sunLight);
-    scene.add(new THREE.AmbientLight(0x9fb3c8, 0.5));
+    
+    const ambientLight = new THREE.AmbientLight(CONFIG.LIGHTING.AMBIENT_COLOR, CONFIG.LIGHTING.AMBIENT_INTENSITY);
+    scene.add(ambientLight);
 
     // ========== 时间控制 ==========
     function getCurrentHour() {
@@ -902,7 +1035,13 @@
 
     function updateSun() {
         const hour = getCurrentHour();
-        const decl = parseFloat(document.getElementById('seasonSelect').value);
+        let decl = parseFloat(document.getElementById('seasonSelect').value);
+        
+        // 如果选择了自定义日期，使用计算出的赤纬角
+        if (decl === 'custom' || isNaN(decl)) {
+            decl = customDeclination || 0;
+        }
+        
         setTimeText(hour);
 
         const rad = Math.PI / 180;
@@ -924,7 +1063,36 @@
         const z = r * Math.cos(az);
 
         sunLight.position.set(x, y, z);
-        sunLight.intensity = alt > 0 ? 1.2 : 0.0;
+        
+        // 动态调整光照强度
+        if (alt > 0) {
+            // 太阳高度角（度）
+            const altDeg = alt * 180 / Math.PI;
+            
+            // 根据太阳高度角调整光照
+            // 归一化高度角 (0-90度 -> 0-1)
+            const altNorm = Math.min(altDeg / 90, 1);
+            
+            // 使用平方曲线使高角度时的亮度增长更缓慢
+            const altCurve = Math.pow(altNorm, 1.5);
+            
+            // 太阳光强度：使用反向曲线，但限制最大值
+            const sunIntensity = CONFIG.LIGHTING.MIN_SUN_INTENSITY + 
+                (CONFIG.LIGHTING.MAX_SUN_INTENSITY - CONFIG.LIGHTING.MIN_SUN_INTENSITY) * 
+                (1 - altCurve * 0.6);
+            
+            // 环境光强度：使用更平缓的曲线
+            const ambientIntensity = CONFIG.LIGHTING.MIN_AMBIENT_INTENSITY + 
+                (CONFIG.LIGHTING.MAX_AMBIENT_INTENSITY - CONFIG.LIGHTING.MIN_AMBIENT_INTENSITY) * 
+                (altCurve * 0.8);
+            
+            sunLight.intensity = sunIntensity;
+            ambientLight.intensity = ambientIntensity;
+        } else {
+            // 太阳在地平线以下
+            sunLight.intensity = 0.0;
+            ambientLight.intensity = CONFIG.LIGHTING.MIN_AMBIENT_INTENSITY;
+        }
     }
 
     // ========== 点击交互 ==========
@@ -960,7 +1128,7 @@
         title.textContent = `${data.buildingName}`;
 
         const hours = data.sunlightHours;
-        const maxHours = 12;
+        const maxHours = CONFIG.SUNLIGHT_ANALYSIS.MAX_HOURS; // 使用配置的8小时
         const percent = Math.min(hours / maxHours * 100, 100);
         const color = getSunlightColor(hours, maxHours);
         const colorHex = '#' + color.getHexString();
@@ -994,7 +1162,7 @@
             </div>
             <div class="sunlight-bar">
                 <div class="sunlight-fill" style="width: ${percent}%; background: ${colorHex};"></div>
-                <span class="sunlight-text">${hours.toFixed(1)}h / 12h</span>
+                <span class="sunlight-text">${hours.toFixed(1)}h</span>
             </div>
         `;
 
@@ -1003,7 +1171,38 @@
 
     // ========== UI 绑定 ==========
     function bindUI() {
-        document.getElementById('seasonSelect').addEventListener('change', () => {
+        // 语言切换
+        initLanguageSwitcher();
+
+        // 日期选择
+        const seasonSelect = document.getElementById('seasonSelect');
+        const customDatePicker = document.getElementById('customDatePicker');
+        const customDateInput = document.getElementById('customDateInput');
+        
+        // 设置默认日期为今天
+        customDateInput.value = Utils.formatDate(new Date());
+        
+        seasonSelect.addEventListener('change', (e) => {
+            const value = e.target.value;
+            
+            if (value === 'custom') {
+                // 显示日期选择器
+                customDatePicker.style.display = 'block';
+                // 计算当前选择日期的赤纬角
+                customDeclination = Utils.calculateSolarDeclination(customDateInput.value);
+            } else {
+                // 隐藏日期选择器
+                customDatePicker.style.display = 'none';
+                customDeclination = null;
+            }
+            
+            updateSun();
+            clearSunlightResults();
+        });
+        
+        // 自定义日期变化
+        customDateInput.addEventListener('change', (e) => {
+            customDeclination = Utils.calculateSolarDeclination(e.target.value);
             updateSun();
             clearSunlightResults();
         });
@@ -1055,7 +1254,7 @@
                 }
             } catch (err) {
                 console.error('日照计算错误:', err);
-                alert('计算过程中出错，请重试');
+                alert(i18n.t('viewer.errorCalcFailed'));
             }
 
             btn.disabled = false;
@@ -1093,7 +1292,15 @@
         mql.addEventListener('change', applyMobileLayout);
 
         sidebarToggle.addEventListener('click', () => {
-            controlsPanel.classList.toggle('collapsed');
+            const isCollapsed = controlsPanel.classList.toggle('collapsed');
+            // 更新按钮的 title 和 aria-label
+            if (isCollapsed) {
+                sidebarToggle.title = i18n.t('common.expand');
+                sidebarToggle.setAttribute('aria-label', i18n.t('common.expand'));
+            } else {
+                sidebarToggle.title = i18n.t('common.close');
+                sidebarToggle.setAttribute('aria-label', i18n.t('common.close'));
+            }
         });
 
         document.getElementById('canvas-container').addEventListener('click', (e) => {
@@ -1133,6 +1340,193 @@
         document.getElementById('empty-state').style.display = 'none';
     } else {
         console.log('未检测到 DEFAULT_DATA 变量，等待手动上传文件');
+    }
+
+    // ========== 语言切换功能 ==========
+    function initLanguageSwitcher() {
+        const langBtns = document.querySelectorAll('.lang-btn');
+        
+        // 设置初始激活状态
+        updateLangButtons();
+        
+        // 绑定点击事件
+        langBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const lang = btn.dataset.lang;
+                if (i18n.setLanguage(lang)) {
+                    updateLangButtons();
+                    updatePageLanguage();
+                    updateDynamicContent();
+                }
+            });
+        });
+        
+        // 初始化页面语言
+        updatePageLanguage();
+    }
+
+    function updateLangButtons() {
+        const currentLang = i18n.getCurrentLanguage();
+        document.querySelectorAll('.lang-btn').forEach(btn => {
+            if (btn.dataset.lang === currentLang) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+    }
+
+    function updatePageLanguage() {
+        // 更新所有带 data-i18n 属性的元素
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+            const key = el.getAttribute('data-i18n');
+            const translation = i18n.t(key);
+            
+            if (el.tagName === 'INPUT' && (el.type === 'button' || el.type === 'submit')) {
+                el.value = translation;
+            } else if (el.tagName === 'OPTION') {
+                el.textContent = translation;
+            } else {
+                el.textContent = translation;
+            }
+        });
+        
+        // 更新页面标题
+        document.title = i18n.t('viewer.title');
+        
+        // 更新 HTML lang 属性
+        document.documentElement.lang = i18n.getCurrentLanguage() === 'zh' ? 'zh-CN' : 'en';
+        
+        // 更新侧边栏切换按钮的 title
+        const sidebarToggle = document.getElementById('sidebarToggle');
+        const controlsPanel = document.getElementById('controls');
+        if (sidebarToggle && controlsPanel) {
+            const isCollapsed = controlsPanel.classList.contains('collapsed');
+            const titleText = isCollapsed ? i18n.t('common.expand') : i18n.t('common.close');
+            sidebarToggle.title = titleText;
+            sidebarToggle.setAttribute('aria-label', titleText);
+        }
+    }
+
+    function updateDynamicContent() {
+        // 更新纬度显示
+        updateLatDisplay();
+        
+        // 更新时间显示
+        const hour = getCurrentHour();
+        setTimeText(hour);
+        
+        // 如果有日照统计结果，更新显示
+        if (sunlightResults) {
+            showSunlightStats(sunlightResults);
+        }
+    }
+
+    function updateLatDisplay() {
+        const latDisplay = document.getElementById('latDisplay');
+        if (latDisplay) {
+            const hemisphere = LATITUDE >= 0 ? i18n.t('viewer.northLat') : i18n.t('viewer.southLat');
+            latDisplay.textContent = `${i18n.t('viewer.currentLat')}: ${hemisphere} ${Math.abs(LATITUDE).toFixed(2)}°`;
+        }
+    }
+
+    /**
+     * 更新信息面板文字（支持多语言）
+     */
+    function showUnitInfo(data) {
+        const panel = document.getElementById('unitInfoPanel');
+        const content = document.getElementById('unitInfoContent');
+        const title = document.getElementById('unitInfoTitle');
+
+        title.textContent = `${data.buildingName}`;
+
+        const hours = data.sunlightHours;
+        const maxHours = CONFIG.SUNLIGHT_ANALYSIS.MAX_HOURS; // 使用配置的8小时
+        const percent = Math.min(hours / maxHours * 100, 100);
+        const color = getSunlightColor(hours, maxHours);
+        const colorHex = '#' + color.getHexString();
+
+        let statusText = i18n.t('viewer.statusGood');
+        let statusClass = 'good';
+        if (hours < 2) {
+            statusText = i18n.t('viewer.statusBad');
+            statusClass = 'bad';
+        } else if (hours < 3) {
+            statusText = i18n.t('viewer.statusWarning');
+            statusClass = 'warning';
+        }
+
+        content.innerHTML = `
+            <div class="info-row">
+                <span class="info-label">${i18n.t('viewer.floor')}</span>
+                <span class="info-value">${data.floor} ${i18n.t('viewer.floorUnit')}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">${i18n.t('viewer.unitNumber')}</span>
+                <span class="info-value">${i18n.t('viewer.unitFrom')} ${data.unit} ${i18n.t('viewer.unitTo')}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">${i18n.t('viewer.sunlightDuration')}</span>
+                <span class="info-value" style="color: ${colorHex}">${hours.toFixed(1)} ${i18n.t('viewer.sunlightHours')}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">${i18n.t('viewer.sunlightStatus')}</span>
+                <span class="info-value ${statusClass}">${statusText}</span>
+            </div>
+            <div class="sunlight-bar">
+                <div class="sunlight-fill" style="width: ${percent}%; background: ${colorHex};"></div>
+                <span class="sunlight-text">${hours.toFixed(1)}h</span>
+            </div>
+        `;
+
+        panel.style.display = 'block';
+    }
+
+    /**
+     * 显示日照统计结果（支持多语言）
+     */
+    function showSunlightStats(results) {
+        const statsDiv = document.getElementById('sunlightStats');
+        if (!statsDiv || !results) return;
+
+        const seasonNames = {
+            'zh': {
+                '-23.44': '冬至',
+                '0': '春/秋分',
+                '23.44': '夏至'
+            },
+            'en': {
+                '-23.44': 'Winter Solstice',
+                '0': 'Spring/Autumn Equinox',
+                '23.44': 'Summer Solstice'
+            }
+        };
+
+        const currentLang = i18n.getCurrentLanguage();
+        let seasonName = seasonNames[currentLang][results.declination.toString()];
+        
+        // 如果是自定义日期，显示具体日期
+        if (!seasonName) {
+            const customDateInput = document.getElementById('customDateInput');
+            if (customDateInput && customDateInput.value) {
+                const date = new Date(customDateInput.value);
+                const month = date.getMonth() + 1;
+                const day = date.getDate();
+                seasonName = currentLang === 'zh' ? `${month}月${day}日` : `${month}/${day}`;
+            } else {
+                seasonName = currentLang === 'zh' ? '自定义日期' : 'Custom Date';
+            }
+        }
+
+        let html = `
+            <div class="stat-row">
+                <span class="stat-label">${i18n.t('viewer.analysisDate')}</span>
+                <span class="stat-value">${seasonName}</span>
+            </div>
+        `;
+
+        statsDiv.innerHTML = html;
+        statsDiv.style.display = 'block';
     }
 
 })();

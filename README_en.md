@@ -52,15 +52,19 @@ It allows users to draw building outlines directly over a floor plan image (JPG/
 | **Deployment** | Pure static HTML/CSS/JS. Download and run, no environment installation required. |
 | **Editor** | Converts 2D plans to 3D models. Supports outline drawing, floor height settings, and scale calibration. |
 | **Calculation** | Uses spherical trigonometry for solar paths. Built-in latitude data for 50+ major cities. |
-| **Visuals** | High-precision 4096px shadow maps. Real-time adjustments for Winter/Summer Solstice & Equinoxes (06:00-18:00). |
-| **Quantification** | **New** Calculates sunlight duration per household with heatmap visualization and interactive queries. |
+| **Visuals** | High-precision 4096px shadow maps. Real-time adjustments for Winter/Summer Solstice, Equinoxes, and custom dates (06:00-18:00). Professional compass for orientation. |
+| **Quantification** | Calculates sunlight duration per household with heatmap visualization (light yellow to deep orange gradient). Interactive queries with industry-standard 8-hour maximum. |
 | **Interaction** | Supports PC mouse and mobile touch controls. Features filtering for non-target buildings. |
+| **Multi-language** | Supports Chinese/English switching. Language toggle available in the top-right corner. |
 
 ### 📊 Quantified Sunlight Analysis
 * **Detection Point Generation**: For target buildings (`isThisCommunity: true`), detection points are generated on the south facade based on floor and unit counts. Points are located at the center of the south window (1.2m above floor level).
-* **Duration Calculation**: Performs raycasting from 06:00 to 18:00 at selectable intervals (15/30/6 mins). If the ray towards the sun is unobstructed, the time is accumulated.
-* **Heatmap Visualization**: Displays color-coded tiles on south-facing windows upon calculation completion. Colors range from Deep Blue (0h) to Deep Red (12h).
-* **Interaction**: Click on any unit's heatmap tile to view detailed sunlight data.
+* **Duration Calculation**: Performs raycasting from 06:00 to 18:00 at 6-minute intervals. If the ray towards the sun is unobstructed, the time is accumulated.
+* **Heatmap Visualization**: Displays color-coded tiles on south-facing windows upon calculation completion. Uses warm color scheme from light yellow (0h) to deep orange (8h+), following industry standards.
+* **Interaction**: Click on any unit's heatmap tile to view detailed information (floor, unit number, sunlight duration, status).
+
+### 🧭 Professional Compass
+* Professional 3D compass on the ground clearly marks cardinal directions (N/S/E/W), with north highlighted in red, replacing traditional simple arrows for better orientation guidance.
 
 ---
 
@@ -113,9 +117,9 @@ Open `editor.html` to convert your 2D floor plan into the JSON data required for
 Open `index.html` for 3D visualization and analysis.
 
 1.  **Import Data**: Click the button to load the JSON file exported in Step 1 (or use `examples/sample.json` in the repo for testing).
-2.  **Adjust Environment**: Select a preset city or manually enter latitude; switch dates (Winter/Summer Solstice).
-3.  **Observe Shadows**: Drag the time slider to observe sunlight occlusion on the target floors throughout the day.
-4.  **Quantified Analysis**: Click to calculate sunlight duration and view the heatmap and specific unit data.
+2.  **Adjust Environment**: Select a preset city or manually enter latitude; switch dates (Winter/Summer Solstice/Equinoxes/Custom Date).
+3.  **Observe Shadows**: Drag the time slider to observe sunlight occlusion on the target floors throughout the day. Ground compass indicates orientation.
+4.  **Quantified Analysis**: Click "Calculate Sunlight Duration" to view the heatmap (light yellow to deep orange gradient) and specific unit data. Click heatmap tiles to view individual unit details.
 
 ---
 
@@ -162,6 +166,23 @@ The project uses JSON to transfer building data. `examples/sample.json` provides
     * Solar Elevation: $\sin(h) = \sin(\phi)\sin(\delta) + \cos(\phi)\cos(\delta)\cos(\omega)$
     * Solar Azimuth: $\cos(A) = (\sin(h)\sin(\phi) - \sin(\delta)) / (\cos(h)\cos(\phi))$
 
+### Project Structure
+
+```
+building-sunlight-simulator/
+├── css/                    # Stylesheets
+├── js/
+│   ├── config.js          # Global configuration
+│   ├── utils.js           # Utility functions
+│   ├── i18n.js            # Internationalization
+│   ├── cities.js          # City data
+│   ├── editor.js          # Editor logic
+│   └── viewer.js          # Viewer logic
+├── examples/              # Sample data
+├── editor.html            # Editor page
+└── index.html             # Viewer page
+```
+
 ---
 
 ## 🤝 Contribution
@@ -174,7 +195,7 @@ Issues and Pull Requests are welcome!
 
 ## 📄 License
 
-[MIT License](LICENSE) © 2023 seanwong17
+[MIT License](LICENSE) © 2026 SeanWong17
 
 ---
 

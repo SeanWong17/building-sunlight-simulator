@@ -276,9 +276,8 @@ h2 {
     height: 16px;
     border-radius: 4px;
     background: linear-gradient(90deg, 
-        #313695, #4575b4, #74add1, #abd9e9, 
-        #e0f3f8, #ffffbf, #fee090, #fdae61, 
-        #f46d43, #d73027, #a50026);
+        #fffacd, #ffefaa, #ffdf82, #ffc85a, 
+        #ffaa3c, #f58c28, #dc6414);
 }
 
 .legend-labels {
@@ -475,14 +474,34 @@ h2 {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 18px;
-    transition: background 0.2s;
+    font-size: 20px;
+    transition: all 0.2s;
     z-index: 11;
     color: var(--text);
+    padding: 0;
 }
 
 .sidebar-toggle:hover {
     background: #e2e8f0;
+    transform: scale(1.05);
+}
+
+.sidebar-toggle:active {
+    transform: scale(0.95);
+}
+
+/* 切换按钮图标 */
+.sidebar-toggle::before {
+    content: '×';
+    font-size: 28px;
+    font-weight: 300;
+    line-height: 1;
+}
+
+/* 收起状态的按钮 */
+#controls.collapsed .sidebar-toggle::before {
+    content: '◀';
+    font-size: 16px;
 }
 
 /* 收起状态 */
@@ -517,7 +536,14 @@ h2 {
     .sidebar-toggle {
         width: 34px;
         height: 34px;
-        font-size: 16px;
+    }
+    
+    .sidebar-toggle::before {
+        font-size: 24px;
+    }
+    
+    #controls.collapsed .sidebar-toggle::before {
+        font-size: 14px;
     }
 
     #timeBlock {
@@ -574,4 +600,68 @@ h2 {
         bottom: calc(env(safe-area-inset-bottom, 10px) + 66px);
         width: auto;
     }
+}
+
+/* 语言切换按钮 */
+.lang-switcher {
+    display: flex;
+    gap: 4px;
+    background: rgba(0, 0, 0, 0.05);
+    padding: 2px;
+    border-radius: 6px;
+}
+
+.lang-btn {
+    padding: 4px 10px;
+    border: none;
+    background: transparent;
+    color: #666;
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+.lang-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
+    color: #333;
+}
+
+.lang-btn.active {
+    background: white;
+    color: var(--brand);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* 自定义日期选择器样式 */
+#customDatePicker {
+    margin-top: 8px;
+}
+
+#customDateInput {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #dcdfe6;
+    border-radius: 8px;
+    background: #fff;
+    font-size: 14px;
+    color: #333;
+    box-sizing: border-box;
+    cursor: pointer;
+}
+
+#customDateInput::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.6;
+}
+
+#customDateInput:hover::-webkit-calendar-picker-indicator {
+    opacity: 1;
+}
+
+#customDateInput:focus {
+    outline: none;
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px rgba(11, 116, 255, 0.1);
 }
