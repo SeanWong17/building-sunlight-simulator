@@ -9,88 +9,94 @@
 <body>
 
 <div id="canvas-wrapper">
-    <div id="empty-tip">请在右侧上传图片开始规划</div>
+    <div id="empty-tip" data-i18n="editor.emptyTip">请在右侧上传图片开始规划</div>
     <canvas id="editorCanvas"></canvas>
-    <div id="zoom-info">缩放: 0%</div>
+    <div id="zoom-info"><span data-i18n="editor.zoomInfo">缩放</span>: 0%</div>
 </div>
 
 <div id="sidebar">
-    <h3>🛠️ 楼盘数据配置</h3>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <h3 data-i18n="editor.pageTitle">🛠️ 楼盘数据配置</h3>
+        <div class="lang-switcher">
+            <button class="lang-btn" data-lang="zh">中文</button>
+            <button class="lang-btn" data-lang="en">EN</button>
+        </div>
+    </div>
 
     <div id="topPane">
         <div class="step" id="step-upload">
-            <label>1. 上传规划图/总平图</label>
+            <label data-i18n="editor.step1Title">1. 上传规划图/总平图</label>
             <input type="file" id="fileInput" accept="image/*">
-            <div class="muted">支持拖拽、缩放、绘制多边形表示楼栋轮廓。</div>
+            <div class="muted" data-i18n="editor.step1Hint">支持拖拽、缩放、绘制多边形表示楼栋轮廓。</div>
         </div>
 
         <div class="step" id="step-scale">
-            <label>2. 标定比例尺</label>
+            <label data-i18n="editor.step2Title">2. 标定比例尺</label>
             <div class="muted" style="margin-bottom:5px;">
-                状态: <span id="scaleStatus">未标定</span>
+                <span data-i18n="editor.scaleStatus">状态</span>: <span id="scaleStatus" data-i18n="editor.scaleNotSet">未标定</span>
             </div>
-            <button id="btnStartScale" disabled>开始标定 (点击两点)</button>
+            <button id="btnStartScale" disabled data-i18n="editor.startScale">开始标定 (点击两点)</button>
             <div id="scaleInputArea" style="display:none; margin-top:5px;">
-                <label>两点间实际距离 (米):</label>
+                <label data-i18n="editor.realDistance">两点间实际距离 (米):</label>
                 <input type="number" id="realDistance" value="50" step="0.01" min="0">
-                <button id="btnConfirmScale" class="secondary">确认比例</button>
+                <button id="btnConfirmScale" class="secondary" data-i18n="editor.confirmScale">确认比例</button>
             </div>
         </div>
 
         <div class="step active" id="step-draw">
-            <label>3. 绘制楼栋</label>
+            <label data-i18n="editor.step3Title">3. 绘制楼栋</label>
             <div class="muted" style="margin-bottom:5px;">
-                <span style="color:#28a745;">🖱️ 滚轮缩放，按住中键或空格拖拽视图</span><br>
-                操作: 左键加点，左键双击结束；右键撤销上个点。
+                <span style="color:#28a745;" data-i18n="editor.step3Hint">🖱️ 滚轮缩放，按住中键或空格拖拽视图</span><br>
+                <span data-i18n="editor.step3Operation">操作: 左键加点，左键双击结束；右键撤销上个点。</span>
             </div>
-            <button id="btnDrawMode" class="secondary">当前: ✋ 浏览模式</button>
-            <button id="btnResetView" class="info" style="margin-top:5px;">⟲ 重置视角</button>
+            <button id="btnDrawMode" class="secondary" data-i18n="editor.modeIdle">当前: ✋ 浏览模式</button>
+            <button id="btnResetView" class="info" style="margin-top:5px;" data-i18n="editor.resetView">⟲ 重置视角</button>
         </div>
 
         <div class="step" id="step-defaults">
-            <label>4. 全局参数 & 默认值</label>
+            <label data-i18n="editor.step4Title">4. 全局参数 & 默认值</label>
             
             <div class="location-config">
-                <label>📍 项目位置（用于日照计算）</label>
+                <label data-i18n="editor.projectLocation">📍 项目位置（用于日照计算）</label>
                 <div class="location-row">
                     <div class="field">
-                        <span class="muted">选择城市</span>
+                        <span class="muted" data-i18n="editor.selectCity">选择城市</span>
                         <select id="citySelect">
-                            <option value="">-- 加载中 --</option>
+                            <option value="" data-i18n="common.loading">-- 加载中 --</option>
                         </select>
                     </div>
                     <div class="field">
-                        <span class="muted">或输入纬度</span>
+                        <span class="muted" data-i18n="editor.orInputLat">或输入纬度</span>
                         <input type="number" id="projectLat" value="36.65" step="0.01" min="-90" max="90">
                     </div>
                 </div>
             </div>
 
-            <label style="font-size:12px; color:#555; margin-bottom:5px;">新楼栋默认参数:</label>
+            <label style="font-size:12px; color:#555; margin-bottom:5px;" data-i18n="editor.defaultParams">新楼栋默认参数:</label>
             <div class="inline-inputs">
                 <div class="field">
-                    <span class="muted">默认层数</span>
+                    <span class="muted" data-i18n="editor.defaultFloors">默认层数</span>
                     <input type="number" id="defFloors" value="18" min="1" step="1">
                 </div>
                 <div class="field">
-                    <span class="muted">默认层高(米)</span>
+                    <span class="muted" data-i18n="editor.defaultFloorHeight">默认层高(米)</span>
                     <input type="number" id="defFloorHeight" value="3" min="1" step="0.01">
                 </div>
                 <div class="field">
-                    <span class="muted">默认户数/层</span>
+                    <span class="muted" data-i18n="editor.defaultUnits">默认户数/层</span>
                     <input type="number" id="defUnits" value="2" min="1" step="1">
                 </div>
             </div>
             <div class="inline-row">
                 <label style="margin:0; font-weight:normal;">
-                    <input type="checkbox" id="defIsThisCommunity" checked> 默认标记为本小区
+                    <input type="checkbox" id="defIsThisCommunity" checked> <span data-i18n="editor.defaultIsOwn">默认标记为本小区</span>
                 </label>
             </div>
             <div class="inline-row">
                 <label style="margin:0; font-weight:normal;">
-                    <input type="checkbox" id="chkUseDefaults" checked> 新楼栋使用默认值
+                    <input type="checkbox" id="chkUseDefaults" checked> <span data-i18n="editor.useDefaults">新楼栋使用默认值</span>
                 </label>
-                <button id="btnApplyDefaultsAll" class="btn-outline" style="width:auto;">应用到所有楼栋</button>
+                <button id="btnApplyDefaultsAll" class="btn-outline" style="width:auto;" data-i18n="editor.applyToAll">应用到所有楼栋</button>
             </div>
         </div>
     </div>
@@ -99,7 +105,7 @@
 
     <div id="bottomPane">
         <div class="step" id="step-table" style="margin:0;">
-            <label>5. 楼栋参数表（统一填写/编辑）</label>
+            <label data-i18n="editor.step5Title">5. 楼栋参数表（统一填写/编辑）</label>
         </div>
 
         <div class="resizer" id="tableResizer" title="拖动以调整表格高度"></div>
@@ -108,23 +114,26 @@
             <table>
                 <thead>
                     <tr>
-                        <th style="width:200px;">名称（可编辑）</th>
-                        <th style="width:90px;">层数</th>
-                        <th style="width:110px;">层高(米)</th>
-                        <th style="width:90px;">户/层</th>
-                        <th style="width:84px;">本小区</th>
-                        <th style="width:80px;">操作</th>
+                        <th style="width:200px;" data-i18n="editor.tableName">名称（可编辑）</th>
+                        <th style="width:90px;" data-i18n="editor.tableFloors">层数</th>
+                        <th style="width:110px;" data-i18n="editor.tableFloorHeight">层高(米)</th>
+                        <th style="width:90px;" data-i18n="editor.tableUnits">户/层</th>
+                        <th style="width:84px;" data-i18n="editor.tableIsOwn">本小区</th>
+                        <th style="width:80px;" data-i18n="editor.tableActions">操作</th>
                     </tr>
                 </thead>
                 <tbody id="tableBody"></tbody>
             </table>
         </div>
 
-        <button id="btnExport" class="success" style="margin-top: 0;">导出 JSON 配置</button>
+        <button id="btnExport" class="success" style="margin-top: 0;" data-i18n="editor.exportButton">导出 JSON 配置</button>
     </div>
 </div>
 
+<script src="js/config.js"></script>
+<script src="js/utils.js"></script>
 <script src="js/cities.js"></script>
+<script src="js/i18n.js"></script>
 <script src="js/editor.js"></script>
 </body>
 </html>

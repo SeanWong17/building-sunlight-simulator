@@ -7,42 +7,48 @@
     <link rel="stylesheet" href="css/viewer.css">
 </head>
 <body>
-    <div id="empty-state">请在右上角导入 JSON 配置文件</div>
+    <div id="empty-state" data-i18n="viewer.emptyState">请在右上角导入 JSON 配置文件</div>
 
     <div id="controls">
-        <button class="sidebar-toggle" id="sidebarToggle" title="收起/展开">☰</button>
+        <button class="sidebar-toggle" id="sidebarToggle" title="收起/展开" aria-label="切换侧边栏"></button>
         
         <div class="panel-content">
-            <h2>☀️ 楼盘采光模拟</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h2 data-i18n="viewer.pageTitle">☀️ 楼盘采光模拟</h2>
+                <div class="lang-switcher">
+                    <button class="lang-btn" data-lang="zh">中文</button>
+                    <button class="lang-btn" data-lang="en">EN</button>
+                </div>
+            </div>
 
             <div class="control-group" id="statusBlock">
-                <label>当前状态</label>
+                <label data-i18n="viewer.statusLabel">当前状态</label>
                 <div style="font-size: 13px; color: #555; line-height: 1.5;">
-                    坐标对齐规划图<br>
-                    方位：<span style="color:#e01919;font-weight:800;">↑ 上方为北</span>
+                    <span data-i18n="viewer.statusCoord">坐标对齐规划图</span><br>
+                    <span data-i18n="viewer.statusOrientation">方位：</span><span style="color:#e74c3c;font-weight:800;" data-i18n="viewer.statusNorth">↑ 上北下南</span>
                 </div>
             </div>
 
             <div class="control-group">
-                <label>1. 导入数据</label>
+                <label data-i18n="viewer.step1">1. 导入数据</label>
                 <div class="file-upload">
-                    <label for="jsonInput" class="file-upload-btn">📂 选择 JSON 文件</label>
+                    <label for="jsonInput" class="file-upload-btn" data-i18n="viewer.selectJson">📂 选择 JSON 文件</label>
                     <input type="file" id="jsonInput" accept=".json">
                 </div>
             </div>
 
             <div class="control-group">
-                <label>2. 项目位置</label>
+                <label data-i18n="viewer.step2">2. 项目位置</label>
                 <div class="location-config">
                     <div class="location-row">
                         <div class="field">
-                            <span>选择城市</span>
+                            <span data-i18n="viewer.selectCity">选择城市</span>
                             <select id="citySelect">
-                                <option value="">-- 加载中 --</option>
+                                <option value="" data-i18n="common.loading">-- 加载中 --</option>
                             </select>
                         </div>
                         <div class="field">
-                            <span>手动输入纬度</span>
+                            <span data-i18n="viewer.inputLatitude">手动输入纬度</span>
                             <input type="number" id="latitudeInput" value="36.65" step="0.01" min="-90" max="90">
                         </div>
                     </div>
@@ -51,55 +57,51 @@
             </div>
 
             <div class="control-group">
-                <label for="seasonSelect">3. 选择日期</label>
+                <label for="seasonSelect" data-i18n="viewer.step3">3. 选择日期</label>
                 <select id="seasonSelect">
-                    <option value="-23.44" selected>冬至</option>
-                    <option value="0">春/秋分</option>
-                    <option value="23.44">夏至</option>
+                    <option value="-23.44" selected data-i18n="viewer.winterSolstice">冬至</option>
+                    <option value="0" data-i18n="viewer.springAutumn">春/秋分</option>
+                    <option value="23.44" data-i18n="viewer.summerSolstice">夏至</option>
+                    <option value="custom" data-i18n="viewer.customDate">自定义日期</option>
                 </select>
+                <div id="customDatePicker" style="display:none; margin-top:8px;">
+                    <input type="date" id="customDateInput" style="width:100%; padding:6px; border:1px solid #ddd; border-radius:4px;">
+                </div>
             </div>
 
             <div class="control-group">
-                <label>显示范围</label>
+                <label data-i18n="viewer.displayRange">显示范围</label>
                 <div class="inline-row" title="勾选后仅显示 isThisCommunity=true 的楼栋">
                     <input type="checkbox" id="toggleOwnOnly">
-                    <span>只显示本小区</span>
+                    <span data-i18n="viewer.ownOnly">只显示本小区</span>
                 </div>
             </div>
 
             <div class="control-group" id="timeBlock">
-                <label for="timeSlider">时间 (06:00 - 18:00)</label>
+                <label for="timeSlider" data-i18n="viewer.timeLabel">时间 (06:00 - 18:00)</label>
                 <input type="range" id="timeSlider" min="6" max="18" step="0.05" value="10">
                 <div class="time-display" id="timeText">10:00</div>
             </div>
 
             <!-- 日照分析功能 -->
             <div class="control-group sunlight-analysis">
-                <label>4. 日照分析</label>
+                <label data-i18n="viewer.step4">4. 日照分析</label>
                 <div class="analysis-config">
-                    <div class="inline-row">
-                        <span>时间间隔</span>
-                        <select id="timeStepSelect">
-                            <option value="0.25">15分钟（推荐）</option>
-                            <option value="0.5">30分钟（快速）</option>
-                            <option value="0.1">6分钟（精确）</option>
-                        </select>
-                    </div>
-                    <button id="calcSunlightBtn" class="calc-btn">🔬 计算日照时长</button>
+                    <button id="calcSunlightBtn" class="calc-btn" data-i18n="viewer.calcButton">🔬 计算日照时长</button>
                     <div id="calcProgress" class="calc-progress" style="display:none;">
                         <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
-                        <span id="progressText">计算中...</span>
+                        <span id="progressText" data-i18n="viewer.calculating">计算中...</span>
                     </div>
                     <div class="inline-row" style="margin-top: 10px;">
                         <input type="checkbox" id="toggleHeatmap" disabled>
-                        <span>显示日照热力图</span>
+                        <span data-i18n="viewer.showHeatmap">显示日照热力图</span>
                     </div>
                     <div id="heatmapLegend" class="heatmap-legend" style="display:none;">
                         <div class="legend-bar"></div>
                         <div class="legend-labels">
-                            <span>0h</span>
-                            <span>6h</span>
-                            <span>12h</span>
+                            <span data-i18n="viewer.legendHours.0">0h</span>
+                            <span data-i18n="viewer.legendHours.1">4h</span>
+                            <span data-i18n="viewer.legendHours.2">8h</span>
                         </div>
                     </div>
                     <div id="sunlightStats" class="sunlight-stats" style="display:none;"></div>
@@ -107,7 +109,7 @@
             </div>
 
             <div class="legend">
-                <span>💡 提示: 拖动查看阴影变化</span>
+                <span data-i18n="viewer.tip">💡 提示: 拖动查看阴影变化</span>
             </div>
         </div>
     </div>
@@ -130,7 +132,7 @@
     <!-- 点击建筑物时显示的信息面板 -->
     <div id="unitInfoPanel" class="unit-info-panel" style="display:none;">
         <div class="unit-info-header">
-            <span id="unitInfoTitle">户型信息</span>
+            <span id="unitInfoTitle" data-i18n="viewer.unitInfo">户型信息</span>
             <button id="closeUnitInfo">×</button>
         </div>
         <div id="unitInfoContent"></div>
@@ -141,7 +143,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="examples/sample_data.js" onerror="console.log('未找到默认示例数据，请手动上传')"></script>
+    <script src="js/config.js"></script>
+    <script src="js/utils.js"></script>
     <script src="js/cities.js"></script>
+    <script src="js/i18n.js"></script>
     <script src="js/viewer.js"></script>
 </body>
 </html>

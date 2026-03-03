@@ -1,5 +1,10 @@
 /**
  * 楼盘规划图配置器 - 主逻辑
+ * Building Plan Configurator - Main Logic
+ * 
+ * @description 提供2D平面图编辑功能，支持楼栋轮廓绘制、比例尺标定、参数配置等
+ * @author Building Sunlight Simulator Team
+ * @version 1.0.0
  */
 (function() {
     'use strict';
@@ -40,33 +45,20 @@
     let lastMouseX = 0;
     let lastMouseY = 0;
 
-    const CLOSE_EPS_BASE = 8;
+    // 使用配置常量
+    const CLOSE_EPS_BASE = CONFIG.EDITOR.CLOSE_EPSILON;
+    const SANITIZE_EPS = CONFIG.EDITOR.SANITIZE_EPSILON;
 
-    // ========== 工具函数 ==========
-    function dist(a, b) {
-        return Math.hypot(a.x - b.x, a.y - b.y);
-    }
-
-    function pointsEqual(a, b, eps = 0) {
-        if (!a || !b) return false;
-        if (eps > 0) return dist(a, b) <= eps;
-        return a.x === b.x && a.y === b.y;
-    }
-
-    function clampInt(v, min, max, fallback) {
-        if (Number.isNaN(v)) return fallback;
-        return Math.min(Math.max(Math.round(v), min), max);
-    }
-
-    function clampNum(v, min, max, fallback) {
-        if (Number.isNaN(v)) return fallback;
-        return Math.min(Math.max(v, min), max);
-    }
+    // ========== 工具函数（使用 Utils 模块）==========
+    const { distance, pointsEqual, clampInt, clampFloat, getPolygonCenter } = Utils;
 
     /**
      * 多边形净化 - 移除重复点、过短边、共线点
+     * @param {Array} rawPoints - 原始点数组
+     * @param {number} epsPx - 误差阈值（像素）
+     * @returns {Array} 净化后的点数组
      */
-    function sanitizePolygon(rawPoints, epsPx = 0.5) {
+    function sanitizePolygon(rawPoints, epsPx = SANITIZE_EPS) {
         if (!Array.isArray(rawPoints)) return [];
         const eps = Math.max(1e-6, epsPx);
         let pts = rawPoints.slice();
@@ -136,11 +128,15 @@
     // ========== 城市选择器初始化 ==========
     function initCitySelector() {
         if (typeof generateCityOptions === 'function') {
-            citySelectEl.innerHTML = generateCityOptions('济南'); // 默认济南
+            const defaultCity = CONFIG.DEFAULTS.CITY;
+            citySelectEl.innerHTML = generateCityOptions(defaultCity);
+            
             // 设置默认纬度
-            const defaultLat = getLatitudeByCity('济南');
+            const defaultLat = getLatitudeByCity(defaultCity);
             if (defaultLat) {
                 projectLatEl.value = defaultLat;
+            } else {
+                projectLatEl.value = CONFIG.DEFAULTS.LATITUDE;
             }
         }
 
@@ -205,7 +201,7 @@
 
     function updateTransform() {
         canvas.style.transform = `translate(${viewX}px, ${viewY}px) scale(${viewScale})`;
-        zoomInfo.innerText = `缩放: ${Math.round(viewScale * 100)}%`;
+        zoomInfo.innerText = `${i18n.t('editor.zoomInfo')}: ${Math.round(viewScale * 100)}%`;
     }
 
     function getCanvasCoordinates(e) {
@@ -406,13 +402,13 @@
     // ========== 多边形完成 ==========
     function finishPolygon() {
         if (scaleRatio === 0) {
-            alert("请先标定比例尺！");
+            alert(i18n.t('editor.alertNoScale'));
             currentPoly = [];
             draw();
             return;
         }
         if (currentPoly.length < 3) {
-            alert("至少需要三个点才能闭合楼栋。");
+            alert(i18n.t('editor.alertMinPoints'));
             currentPoly = [];
             draw();
             return;
@@ -421,7 +417,7 @@
         const eps = 0.75;
         const cleaned = sanitizePolygon(currentPoly, eps);
         if (cleaned.length < 3) {
-            alert("绘制的多边形无效，请重画。");
+            alert(i18n.t('editor.alertInvalidPoly'));
             currentPoly = [];
             draw();
             return;
@@ -429,13 +425,15 @@
 
         const idx = buildings.length + 1;
         const useDefaults = chkUseDefaults.checked;
+        const validation = CONFIG.VALIDATION;
+        
         const b = {
             id: Date.now() + Math.random(),
             name: `${idx}号楼`,
-            floors: useDefaults ? clampInt(parseInt(defFloorsEl.value), 1, 300, 18) : 18,
-            floorHeight: useDefaults ? clampNum(parseFloat(defFloorHeightEl.value), 1, 20, 3) : 3,
-            units: useDefaults ? clampInt(parseInt(defUnitsEl.value), 1, 50, 2) : 2,
-            isThisCommunity: useDefaults ? !!defIsThisCommunityEl.checked : true,
+            floors: useDefaults ? clampInt(parseInt(defFloorsEl.value), validation.FLOORS.MIN, validation.FLOORS.MAX, CONFIG.DEFAULTS.FLOORS) : CONFIG.DEFAULTS.FLOORS,
+            floorHeight: useDefaults ? clampFloat(parseFloat(defFloorHeightEl.value), validation.FLOOR_HEIGHT.MIN, validation.FLOOR_HEIGHT.MAX, CONFIG.DEFAULTS.FLOOR_HEIGHT) : CONFIG.DEFAULTS.FLOOR_HEIGHT,
+            units: useDefaults ? clampInt(parseInt(defUnitsEl.value), validation.UNITS.MIN, validation.UNITS.MAX, CONFIG.DEFAULTS.UNITS_PER_FLOOR) : CONFIG.DEFAULTS.UNITS_PER_FLOOR,
+            isThisCommunity: useDefaults ? !!defIsThisCommunityEl.checked : CONFIG.DEFAULTS.IS_THIS_COMMUNITY,
             points: cleaned
         };
         buildings.push(b);
@@ -449,24 +447,24 @@
         scalePoints = [];
         mode = 'scaling';
         updateCursor();
-        document.getElementById('scaleStatus').innerText = "请在图中点击两点";
+        document.getElementById('scaleStatus').innerText = i18n.t('editor.scalePrompt');
         document.getElementById('scaleInputArea').style.display = 'none';
         draw();
     });
 
     document.getElementById('btnConfirmScale').addEventListener('click', () => {
         if (scalePoints.length < 2) {
-            alert("请先在图上选择两点。");
+            alert(i18n.t('editor.alertNoScale'));
             return;
         }
         const distPx = Math.hypot(scalePoints[1].x - scalePoints[0].x, scalePoints[1].y - scalePoints[0].y);
         const distReal = parseFloat(document.getElementById('realDistance').value);
         if (!(distReal > 0) || !(distPx > 0)) {
-            alert("请输入正确的实际距离，并确保两点不重合。");
+            alert(i18n.t('editor.alertInvalidDistance'));
             return;
         }
         scaleRatio = distReal / distPx;
-        document.getElementById('scaleStatus').innerText = `已标定 (1px ≈ ${scaleRatio.toFixed(4)}m)`;
+        document.getElementById('scaleStatus').innerText = `${i18n.t('editor.scaleSet')} (1px ≈ ${scaleRatio.toFixed(4)}m)`;
         document.getElementById('scaleInputArea').style.display = 'none';
         toggleDrawMode(true);
         renderTable();
@@ -481,12 +479,12 @@
     function toggleDrawMode(active) {
         if (active) {
             mode = 'drawing';
-            btnDrawMode.innerText = "当前: ✏️ 正在绘制 (双击结束 / 右键撤销)";
+            btnDrawMode.innerText = i18n.t('editor.modeDrawing');
             btnDrawMode.style.background = "#28a745";
             btnDrawMode.style.color = "white";
         } else {
             mode = 'idle';
-            btnDrawMode.innerText = "当前: ✋ 浏览模式";
+            btnDrawMode.innerText = i18n.t('editor.modeIdle');
             btnDrawMode.style.background = "#6c757d";
             btnDrawMode.style.color = "white";
             currentPoly = [];
@@ -508,7 +506,7 @@
             const inpName = document.createElement('input');
             inpName.type = 'text';
             inpName.value = b.name;
-            inpName.placeholder = '输入名称（如：1号楼/配建/幼儿园）';
+            inpName.placeholder = i18n.t('editor.namePlaceholder');
             inpName.addEventListener('input', () => {
                 b.name = inpName.value || `${i + 1}号楼`;
                 draw();
@@ -569,9 +567,9 @@
             const tdOps = document.createElement('td');
             const btnDel = document.createElement('button');
             btnDel.className = 'btn-mini btn-danger';
-            btnDel.textContent = '删除';
+            btnDel.textContent = i18n.t('editor.tableDelete');
             btnDel.addEventListener('click', () => {
-                if (confirm('确定删除该楼栋吗？')) {
+                if (confirm(i18n.t('editor.alertConfirmDelete'))) {
                     buildings.splice(i, 1);
                     renderTable();
                     draw();
@@ -592,9 +590,10 @@
 
     // ========== 应用默认值到所有楼栋 ==========
     btnApplyDefaultsAll.addEventListener('click', () => {
-        const f = clampInt(parseInt(defFloorsEl.value), 1, 300, 18);
-        const h = clampNum(parseFloat(defFloorHeightEl.value), 1, 20, 3);
-        const u = clampInt(parseInt(defUnitsEl.value), 1, 50, 2);
+        const validation = CONFIG.VALIDATION;
+        const f = clampInt(parseInt(defFloorsEl.value), validation.FLOORS.MIN, validation.FLOORS.MAX, CONFIG.DEFAULTS.FLOORS);
+        const h = clampFloat(parseFloat(defFloorHeightEl.value), validation.FLOOR_HEIGHT.MIN, validation.FLOOR_HEIGHT.MAX, CONFIG.DEFAULTS.FLOOR_HEIGHT);
+        const u = clampInt(parseInt(defUnitsEl.value), validation.UNITS.MIN, validation.UNITS.MAX, CONFIG.DEFAULTS.UNITS_PER_FLOOR);
         const own = !!defIsThisCommunityEl.checked;
         buildings = buildings.map(b => ({ ...b, floors: f, floorHeight: h, units: u, isThisCommunity: own }));
         renderTable();
@@ -604,7 +603,7 @@
     // ========== 导出 JSON ==========
     document.getElementById('btnExport').addEventListener('click', () => {
         if (buildings.length === 0) {
-            alert("没有数据可导出");
+            alert(i18n.t('editor.alertNoData'));
             return;
         }
 
@@ -628,11 +627,11 @@
         const centerX = (minX + maxX) / 2;
         const centerY = (minY + maxY) / 2;
 
-        const round2 = n => Math.round(n * 100) / 100;
-        const lat = parseFloat(projectLatEl.value) || 36.65;
+        const round2 = n => Utils.roundTo(n, 2);
+        const lat = parseFloat(projectLatEl.value) || CONFIG.DEFAULTS.LATITUDE;
 
         const exportData = {
-            version: 1.7,
+            version: CONFIG.APP.VERSION,
             latitude: lat,
             scaleRatio: scaleRatio,
             origin: { x: centerX, y: centerY },
@@ -669,9 +668,10 @@
     // ========== 默认参数输入校验 ==========
     [defFloorsEl, defFloorHeightEl, defUnitsEl].forEach(el => {
         el.addEventListener('change', () => {
-            defFloorsEl.value = clampInt(parseInt(defFloorsEl.value), 1, 300, 18);
-            defFloorHeightEl.value = clampNum(parseFloat(defFloorHeightEl.value), 1, 20, 3);
-            defUnitsEl.value = clampInt(parseInt(defUnitsEl.value), 1, 50, 2);
+            const validation = CONFIG.VALIDATION;
+            defFloorsEl.value = clampInt(parseInt(defFloorsEl.value), validation.FLOORS.MIN, validation.FLOORS.MAX, CONFIG.DEFAULTS.FLOORS);
+            defFloorHeightEl.value = clampFloat(parseFloat(defFloorHeightEl.value), validation.FLOOR_HEIGHT.MIN, validation.FLOOR_HEIGHT.MAX, CONFIG.DEFAULTS.FLOOR_HEIGHT);
+            defUnitsEl.value = clampInt(parseInt(defUnitsEl.value), validation.UNITS.MIN, validation.UNITS.MAX, CONFIG.DEFAULTS.UNITS_PER_FLOOR);
         });
     });
 
@@ -757,6 +757,7 @@
     // ========== 初始化 ==========
     window.addEventListener('load', () => {
         initCitySelector();
+        initLanguageSwitcher();
 
         const initialTop = Math.max(160, Math.min(window.innerHeight * 0.6, window.innerHeight * 0.44));
         topPane.style.height = initialTop + 'px';
@@ -768,5 +769,95 @@
     window.addEventListener('resize', () => {
         clampTableHeightToBottomPane();
     });
+
+    // ========== 语言切换功能 ==========
+    function initLanguageSwitcher() {
+        const langBtns = document.querySelectorAll('.lang-btn');
+        
+        // 设置初始激活状态
+        updateLangButtons();
+        
+        // 绑定点击事件
+        langBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const lang = btn.dataset.lang;
+                if (i18n.setLanguage(lang)) {
+                    updateLangButtons();
+                    updatePageLanguage();
+                }
+            });
+        });
+        
+        // 初始化页面语言
+        updatePageLanguage();
+    }
+
+    function updateLangButtons() {
+        const currentLang = i18n.getCurrentLanguage();
+        document.querySelectorAll('.lang-btn').forEach(btn => {
+            if (btn.dataset.lang === currentLang) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+    }
+
+    function updatePageLanguage() {
+        // 更新所有带 data-i18n 属性的元素
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+            const key = el.getAttribute('data-i18n');
+            const translation = i18n.t(key);
+            
+            if (el.tagName === 'INPUT' && (el.type === 'button' || el.type === 'submit')) {
+                el.value = translation;
+            } else if (el.tagName === 'OPTION') {
+                el.textContent = translation;
+            } else {
+                el.textContent = translation;
+            }
+        });
+        
+        // 更新页面标题
+        document.title = i18n.t('editor.title');
+        
+        // 更新 HTML lang 属性
+        document.documentElement.lang = i18n.getCurrentLanguage() === 'zh' ? 'zh-CN' : 'en';
+        
+        // 更新缩放信息
+        updateZoomInfo();
+        
+        // 更新比例尺状态
+        updateScaleStatus();
+        
+        // 更新绘制模式按钮
+        updateDrawModeButton();
+    }
+
+    function updateZoomInfo() {
+        const zoomPercent = Math.round(viewScale * 100);
+        zoomInfo.innerText = `${i18n.t('editor.zoomInfo')}: ${zoomPercent}%`;
+    }
+
+    function updateScaleStatus() {
+        const statusEl = document.getElementById('scaleStatus');
+        if (scaleRatio === 0) {
+            statusEl.setAttribute('data-i18n', 'editor.scaleNotSet');
+            statusEl.textContent = i18n.t('editor.scaleNotSet');
+        } else {
+            statusEl.removeAttribute('data-i18n');
+            statusEl.textContent = `${i18n.t('editor.scaleSet')} (1px ≈ ${scaleRatio.toFixed(4)}m)`;
+        }
+    }
+
+    function updateDrawModeButton() {
+        if (mode === 'drawing') {
+            btnDrawMode.setAttribute('data-i18n', 'editor.modeDrawing');
+            btnDrawMode.innerText = i18n.t('editor.modeDrawing');
+        } else {
+            btnDrawMode.setAttribute('data-i18n', 'editor.modeIdle');
+            btnDrawMode.innerText = i18n.t('editor.modeIdle');
+        }
+    }
 
 })();
