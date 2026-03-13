@@ -1102,9 +1102,24 @@
     function onCanvasClick(event) {
         if (!sunlightResults || !showHeatmap) return;
 
+        // 获取点击位置
         const rect = renderer.domElement.getBoundingClientRect();
-        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        
+        // 支持触摸事件和鼠标事件
+        let clientX, clientY;
+        if (event.touches && event.touches.length > 0) {
+            clientX = event.touches[0].clientX;
+            clientY = event.touches[0].clientY;
+        } else if (event.changedTouches && event.changedTouches.length > 0) {
+            clientX = event.changedTouches[0].clientX;
+            clientY = event.changedTouches[0].clientY;
+        } else {
+            clientX = event.clientX;
+            clientY = event.clientY;
+        }
+
+        mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
         raycasterClick.setFromCamera(mouse, camera);
         const intersects = raycasterClick.intersectObjects(heatmapGroup.children, false);
@@ -1273,8 +1288,9 @@
             document.getElementById('unitInfoPanel').style.display = 'none';
         });
 
-        // 点击画布
+        // 点击画布（支持触摸和鼠标事件）
         renderer.domElement.addEventListener('click', onCanvasClick);
+        renderer.domElement.addEventListener('touchend', onCanvasClick);
 
         // 侧边栏收起/展开
         const controlsPanel = document.getElementById('controls');

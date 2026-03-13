@@ -89,7 +89,7 @@
         let clean = dedup.slice();
         let changed = true;
 
-        function edgeLen(i, j) { return dist(clean[i], clean[j]); }
+        function edgeLen(i, j) { return distance(clean[i], clean[j]); }
         function mod(n, m) { return ((n % m) + m) % m; }
 
         while (changed && clean.length > 3) {
@@ -347,7 +347,7 @@
         if (currentPoly.length > 0) {
             const first = currentPoly[0];
             const eps = CLOSE_EPS_BASE / viewScale;
-            const nearStart = dist(mousePos, first) <= eps && currentPoly.length > 2;
+            const nearStart = distance(mousePos, first) <= eps && currentPoly.length > 2;
 
             ctx.beginPath();
             ctx.moveTo(currentPoly[0].x, currentPoly[0].y);
@@ -391,12 +391,6 @@
         ctx.strokeStyle = strokeColor;
         ctx.lineWidth = 2 / viewScale;
         ctx.stroke();
-    }
-
-    function getPolygonCenter(points) {
-        let x = 0, y = 0;
-        points.forEach(p => { x += p.x; y += p.y; });
-        return { x: x / points.length, y: y / points.length };
     }
 
     // ========== 多边形完成 ==========
@@ -534,7 +528,7 @@
             inpFloorH.step = 0.01;
             inpFloorH.value = b.floorHeight;
             inpFloorH.addEventListener('change', () => {
-                b.floorHeight = clampNum(parseFloat(inpFloorH.value), 1, 20, b.floorHeight);
+                b.floorHeight = clampFloat(parseFloat(inpFloorH.value), 1, 20, b.floorHeight);
                 inpFloorH.value = b.floorHeight;
             });
             tdFloorH.appendChild(inpFloorH);

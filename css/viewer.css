@@ -426,17 +426,6 @@ h2 {
     text-shadow: 0 0 3px white;
 }
 
-/* 指南针 */
-#compass {
-    position: absolute;
-    bottom: 18px;
-    right: 18px;
-    width: 80px;
-    height: 80px;
-    pointer-events: none;
-    z-index: 5;
-}
-
 /* 空状态提示 */
 #empty-state {
     position: absolute;
@@ -448,6 +437,37 @@ h2 {
     font-size: 16px;
     z-index: 4;
     pointer-events: none;
+}
+
+/* GitHub 图标链接 */
+.github-link {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    width: 48px;
+    height: 48px;
+    background: var(--ui-bg);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #24292e;
+    text-decoration: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+    z-index: 10;
+    backdrop-filter: saturate(180%) blur(8px);
+}
+
+.github-link:hover {
+    transform: scale(1.1) rotate(5deg);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    background: rgba(255, 255, 255, 1);
+}
+
+.github-link svg {
+    width: 28px;
+    height: 28px;
 }
 
 /* 图例提示 */
@@ -519,6 +539,18 @@ h2 {
 
 /* 移动端适配 */
 @media (max-width: 600px) {
+    .github-link {
+        top: env(safe-area-inset-top, 8px);
+        left: 8px;
+        width: 42px;
+        height: 42px;
+    }
+
+    .github-link svg {
+        width: 24px;
+        height: 24px;
+    }
+
     #controls {
         top: env(safe-area-inset-top, 8px);
         right: 8px;
@@ -585,13 +617,6 @@ h2 {
         text-align: right;
         font-weight: 800;
         color: var(--brand);
-    }
-
-    #compass {
-        width: 64px;
-        height: 64px;
-        bottom: calc(env(safe-area-inset-bottom, 16px) + 56px);
-        right: 12px;
     }
 
     .unit-info-panel {
