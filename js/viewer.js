@@ -343,28 +343,145 @@
      */
     function findSouthFace(shape) {
         if (shape.length < 3) return null;
-
-        // 找到所有边
-        const edges = [];
+        let signedArea = 0;
         for (let i = 0; i < shape.length; i++) {
             const p1 = shape[i];
             const p2 = shape[(i + 1) % shape.length];
-            const midY = (p1.y + p2.y) / 2;
-            edges.push({ p1, p2, midY });
+            signedArea += p1.x * p2.y - p2.x * p1.y;
+        }
+        const isCCW = signedArea > 0;
+        const southSegments = [];
+
+        for (let i = 0; i < shape.length; i++) {
+            const p1 = shape[i];
+            const p2 = shape[(i + 1) % shape.length];
+            const dx = p2.x - p1.x;
+            const dy = p2.y - p1.y;
+            const len = Math.hypot(dx, dy);
+            if (len <= 1e-6) continue;
+
+            const leftNormal = { x: -dy / len, y: dx / len };
+            const rightNormal = { x: dy / len, y: -dx / len };
+            const outward = isCCW ? rightNormal : leftNormal;
+            if (outward.y <= 0.2) continue;
+
+            let start = p1;
+            let end = p2;
+            if (start.x > end.x || (start.x === end.x && start.y > end.y)) {
+                [start, end] = [end, start];
+            }
+            southSegments.push({ start, end, len, outward });
         }
 
-        // 找到 y 值最大的边（最南）
-        edges.sort((a, b) => b.midY - a.midY);
-        const southEdge = edges[0];
-
-        // 确保从西到东排序（x 从小到大）
-        let start = southEdge.p1;
-        let end = southEdge.p2;
-        if (start.x > end.x) {
-            [start, end] = [end, start];
+        if (southSegments.length === 0) {
+            const edges = [];
+            for (let i = 0; i < shape.length; i++) {
+                const p1 = shape[i];
+                const p2 = shape[(i + 1) % shape.length];
+                const midY = (p1.y + p2.y) / 2;
+                edges.push({ p1, p2, midY });
+            }
+            edges.sort((a, b) => b.midY - a.midY);
+            const southEdge = edges[0];
+            let start = southEdge.p1;
+            let end = southEdge.p2;
+            if (start.x > end.x) {
+                [start, end] = [end, start];
+            }
+            return { start, end };
         }
 
-        return { start, end };
+        southSegments.sort((a, b) => ((a.start.x + a.end.x) / 2) - ((b.start.x + b.end.x) / 2));
+        const totalLength = southSegments.reduce((sum, s) => sum + s.len, 0);
+        let cursor = 0;
+        southSegments.forEach(s => {
+            s.accStart = cursor;
+            cursor += s.len;
+            s.accEnd = cursor;
+        });
+
+        function getPointAtDistance(distanceFromWest) {
+            const d = Math.min(Math.max(distanceFromWest, 0), totalLength);
+            for (const seg of southSegments) {
+                if (d <= seg.accEnd || seg === southSegments[southSegments.length - 1]) {
+                    const local = seg.len > 0 ? (d - seg.accStart) / seg.len : 0;
+                    const x = seg.start.x + (seg.end.x - seg.start.x) * local;
+                    const y = seg.start.y + (seg.end.y - seg.start.y) * local;
+                    const tx = seg.len > 0 ? (seg.end.x - seg.start.x) / seg.len : 1;
+                    const ty = seg.len > 0 ? (seg.end.y - seg.start.y) / seg.len : 0;
+                    return { x, y, outward: seg.outward, tangent: { x: tx, y: ty }, segmentLength: seg.len };
+                }
+            }
+            const last = southSegments[southSegments.length - 1];
+            const tx = last.len > 0 ? (last.end.x - last.start.x) / last.len : 1;
+            const ty = last.len > 0 ? (last.end.y - last.start.y) / last.len : 0;
+            return { x: last.end.x, y: last.end.y, outward: last.outward, tangent: { x: tx, y: ty }, segmentLength: last.len };
+        }
+
+        function allocateUnits(units) {
+            const segCount = southSegments.length;
+            if (units <= 0) return new Array(segCount).fill(0);
+            const counts = new Array(segCount).fill(0);
+            if (units < segCount) {
+                const order = southSegments
+                    .map((s, idx) => ({ idx, len: s.len }))
+                    .sort((a, b) => b.len - a.len)
+                    .slice(0, units);
+                order.forEach(o => { counts[o.idx] = 1; });
+                return counts;
+            }
+
+            counts.fill(1);
+            let remaining = units - segCount;
+            if (remaining <= 0) return counts;
+
+            const weights = southSegments.map(s => s.len);
+            const wSum = weights.reduce((a, b) => a + b, 0) || 1;
+            const remainders = [];
+            let used = 0;
+            for (let i = 0; i < segCount; i++) {
+                const raw = (weights[i] / wSum) * remaining;
+                const base = Math.floor(raw);
+                counts[i] += base;
+                used += base;
+                remainders.push({ idx: i, r: raw - base });
+            }
+            let left = remaining - used;
+            remainders.sort((a, b) => b.r - a.r);
+            for (let i = 0; i < remainders.length && left > 0; i++) {
+                counts[remainders[i].idx] += 1;
+                left--;
+            }
+            return counts;
+        }
+
+        function getUnitPlacements(units) {
+            const counts = allocateUnits(units);
+            const placements = [];
+            for (let segIdx = 0; segIdx < southSegments.length; segIdx++) {
+                const seg = southSegments[segIdx];
+                const k = counts[segIdx];
+                if (k <= 0) continue;
+                const dx = seg.end.x - seg.start.x;
+                const dy = seg.end.y - seg.start.y;
+                const tx = seg.len > 0 ? dx / seg.len : 1;
+                const ty = seg.len > 0 ? dy / seg.len : 0;
+                const cellWidth = seg.len > 0 ? (seg.len / k) * 0.95 : 1;
+                for (let i = 0; i < k; i++) {
+                    const t = (i + 0.5) / k;
+                    placements.push({
+                        x: seg.start.x + dx * t,
+                        y: seg.start.y + dy * t,
+                        outward: seg.outward,
+                        tangent: { x: tx, y: ty },
+                        cellWidth
+                    });
+                }
+            }
+            return placements;
+        }
+
+        return { start: southSegments[0].start, end: southSegments[southSegments.length - 1].end, southSegments, totalLength, getPointAtDistance, getUnitPlacements };
     }
 
     /**
@@ -378,33 +495,43 @@
 
         const southFace = findSouthFace(building.shape);
         if (!southFace) return points;
-
-        const sDx = southFace.end.x - southFace.start.x;
-        const sDy = southFace.end.y - southFace.start.y;
-        const len = Math.sqrt(sDx * sDx + sDy * sDy);
-        
-        // 法向量计算
-        const nx = sDy / len;
-        const ny = -sDx / len;
+        const placements = typeof southFace.getUnitPlacements === 'function' ? southFace.getUnitPlacements(units) : null;
 
         for (let floor = 0; floor < floors; floor++) {
             const windowHeight = floor * floorHeight + floorHeight * 0.4 + 1.2;
 
             for (let unit = 0; unit < units; unit++) {
-                // t 的计算改为 (units - 1 - unit + 0.5) / units
-                // unit=0 对应 end(东)
-                const t = (units - 1 - unit + 0.5) / units; 
-                
-                const x = southFace.start.x + sDx * t;
-                const y = southFace.start.y + sDy * t;
+                let x, y, outward;
+                if (placements && placements.length === units) {
+                    const p = placements[units - 1 - unit];
+                    x = p.x;
+                    y = p.y;
+                    outward = p.outward;
+                } else {
+                    if (typeof southFace.getPointAtDistance === 'function' && typeof southFace.totalLength === 'number' && southFace.totalLength > 0) {
+                        const d = southFace.totalLength * (units - (unit + 1) + 0.5) / units;
+                        const hit = southFace.getPointAtDistance(d);
+                        x = hit.x;
+                        y = hit.y;
+                        outward = hit.outward;
+                    } else {
+                    const sDx = southFace.end.x - southFace.start.x;
+                    const sDy = southFace.end.y - southFace.start.y;
+                    const len = Math.sqrt(sDx * sDx + sDy * sDy);
+                    const t = (units - 1 - unit + 0.5) / units;
+                    x = southFace.start.x + sDx * t;
+                    y = southFace.start.y + sDy * t;
+                    outward = len > 1e-6 ? { x: -sDy / len, y: sDx / len } : { x: 0, y: 1 };
+                    }
+                }
 
                 points.push({
                     buildingIndex,
                     buildingName: building.name || `建筑${buildingIndex + 1}`,
                     floor: floor + 1,
                     unit: unit + 1, // 此时 unit 1 对应最东侧
-                    x: x + nx * 0.5,
-                    y: y + Math.abs(ny) * 0.5,
+                    x: x + (outward?.x || 0) * 0.5,
+                    y: y + (outward?.y || 0) * 0.5,
                     z: windowHeight,
                     sunlightHours: 0
                 });
@@ -636,6 +763,19 @@
         if (!results || !results.points) return;
 
         const maxHours = CONFIG.SUNLIGHT_ANALYSIS.MAX_HOURS; // 使用配置的8小时
+        const facadeCache = new Map();
+        const getFacade = (buildingIndex) => {
+            if (facadeCache.has(buildingIndex)) return facadeCache.get(buildingIndex);
+            const building = currentData.buildings[buildingIndex];
+            if (!building?.shape) {
+                facadeCache.set(buildingIndex, null);
+                return null;
+            }
+            const facade = findSouthFace(building.shape);
+            const v = facade ? { facade, placementsCache: new Map() } : null;
+            facadeCache.set(buildingIndex, v);
+            return v;
+        };
 
         results.points.forEach(point => {
             const building = currentData.buildings[point.buildingIndex];
@@ -643,19 +783,48 @@
 
             const floorHeight = building.floorHeight || 3;
             const units = building.units || 1;
-            const southFace = findSouthFace(building.shape);
-            if (!southFace) return;
+            const cached = getFacade(point.buildingIndex);
+            if (!cached?.facade) return;
 
-            const startX = southFace.start.x;
-            const startY = southFace.start.y;
-            const endX = southFace.end.x;
-            const endY = southFace.end.y;
-            const dx = endX - startX;
-            const dy = endY - startY;
-            const faceLength = Math.sqrt(dx * dx + dy * dy);
+            let placements = cached.placementsCache.get(units);
+            if (!placements) {
+                placements = typeof cached.facade.getUnitPlacements === 'function' ? cached.facade.getUnitPlacements(units) : null;
+                cached.placementsCache.set(units, placements);
+            }
 
-            const unitWidth = faceLength / units;
-            const cellWidth = unitWidth * 0.95;
+            let wallDataX, wallDataY, outward, tangent, cellWidth;
+            if (placements && placements.length === units) {
+                const p = placements[units - point.unit];
+                wallDataX = p.x;
+                wallDataY = p.y;
+                outward = p.outward;
+                tangent = p.tangent;
+                cellWidth = p.cellWidth;
+            } else if (typeof cached.facade.getPointAtDistance === 'function' && typeof cached.facade.totalLength === 'number' && cached.facade.totalLength > 0) {
+                const d = cached.facade.totalLength * (units - point.unit + 0.5) / units;
+                const hit = cached.facade.getPointAtDistance(d);
+                wallDataX = hit.x;
+                wallDataY = hit.y;
+                outward = hit.outward;
+                tangent = hit.tangent;
+                const unitWidth = cached.facade.totalLength > 0 ? (cached.facade.totalLength / units) : 1;
+                cellWidth = unitWidth * 0.95;
+            } else {
+                const startX = cached.facade.start.x;
+                const startY = cached.facade.start.y;
+                const endX = cached.facade.end.x;
+                const endY = cached.facade.end.y;
+                const dx = endX - startX;
+                const dy = endY - startY;
+                const faceLength = Math.sqrt(dx * dx + dy * dy);
+                const t = (units - point.unit + 0.5) / units;
+                wallDataX = startX + dx * t;
+                wallDataY = startY + dy * t;
+                outward = faceLength > 1e-6 ? { x: -dy / faceLength, y: dx / faceLength } : { x: 0, y: 1 };
+                tangent = faceLength > 1e-6 ? { x: dx / faceLength, y: dy / faceLength } : { x: 1, y: 0 };
+                const unitWidth = faceLength > 0 ? (faceLength / units) : 1;
+                cellWidth = unitWidth * 0.95;
+            }
             const cellHeight = floorHeight * 0.9;
 
             const geometry = new THREE.PlaneGeometry(cellWidth, cellHeight);
@@ -673,19 +842,25 @@
 
             const mesh = new THREE.Mesh(geometry, material);
 
-            // 计算位置时的 t 也要反向，以匹配 point.unit
-            const t = (units - point.unit + 0.5) / units;
-
-            const wallDataX = startX + dx * t;
-            const wallDataY = startY + dy * t;
             const wallHeight = (point.floor - 0.5) * floorHeight;
-
-            const normalX = -dy / faceLength;
-            const normalZ = dx / faceLength;
             const offset = 0.3;
+            const nx = outward?.x || 0;
+            const ny = outward?.y || 0;
 
-            mesh.position.set(wallDataX + normalX * offset, wallHeight, wallDataY + normalZ * offset);
-            mesh.lookAt(wallDataX + normalX * 100, wallHeight, wallDataY + normalZ * 100);
+            mesh.position.set(wallDataX + nx * offset, wallHeight, wallDataY + ny * offset);
+            const up = new THREE.Vector3(0, 1, 0);
+            const xAxis = new THREE.Vector3(tangent?.x || 1, 0, tangent?.y || 0);
+            if (xAxis.lengthSq() < 1e-8) xAxis.set(1, 0, 0);
+            xAxis.normalize();
+            let zAxis = xAxis.clone().cross(up);
+            const outward3 = new THREE.Vector3(nx, 0, ny);
+            if (outward3.lengthSq() > 1e-8 && zAxis.dot(outward3) < 0) {
+                xAxis.negate();
+                zAxis = xAxis.clone().cross(up);
+            }
+            zAxis.normalize();
+            const m = new THREE.Matrix4().makeBasis(xAxis, up, zAxis);
+            mesh.setRotationFromMatrix(m);
 
             mesh.userData = {
                 type: 'heatmapCell',
