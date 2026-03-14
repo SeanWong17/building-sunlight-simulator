@@ -690,3 +690,250 @@ h2 {
     border-color: var(--brand);
     box-shadow: 0 0 0 3px rgba(11, 116, 255, 0.1);
 }
+
+/* ===== 楼间距测量工具样式 ===== */
+.measurement-tool .measurement-config {
+    background: #e8f4f8;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #b8d4e3;
+}
+
+.measurement-btn {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(135deg, #17a2b8, #138496);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+    transition: all 0.2s;
+    box-shadow: 0 2px 8px rgba(23, 162, 184, 0.3);
+}
+
+.measurement-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #1bc0d8, #17a2b8);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(23, 162, 184, 0.4);
+}
+
+.measurement-btn.active {
+    background: linear-gradient(135deg, #dc3545, #c82333);
+    box-shadow: 0 2px 8px rgba(220, 53, 69, 0.3);
+}
+
+.measurement-result {
+    margin-top: 12px;
+    padding: 12px;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+}
+
+.measurement-info {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px dashed #eee;
+}
+
+.measurement-info:last-of-type {
+    border-bottom: none;
+}
+
+.measurement-label {
+    color: #666;
+    font-size: 13px;
+}
+
+.measurement-value {
+    font-weight: 600;
+    color: #333;
+    font-size: 14px;
+}
+
+.measurement-status {
+    margin-top: 10px;
+    padding: 8px;
+    border-radius: 6px;
+    text-align: center;
+    font-weight: bold;
+    font-size: 13px;
+}
+
+.measurement-status.compliant {
+    background: #d4edda;
+    color: #155724;
+}
+
+.measurement-status.non-compliant {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.clear-btn {
+    width: 100%;
+    padding: 8px;
+    background: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+.clear-btn:hover {
+    background: #5a6268;
+}
+
+/* ===== 四季对比分屏样式 ===== */
+.season-compare .season-compare-config {
+    background: #f0f8ff;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #c5e0f7;
+}
+
+.season-compare-btn {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(135deg, #6f42c1, #5a32a3);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+    transition: all 0.2s;
+    box-shadow: 0 2px 8px rgba(111, 66, 193, 0.3);
+}
+
+.season-compare-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #8255d4, #6f42c1);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(111, 66, 193, 0.4);
+}
+
+.season-compare-btn.active {
+    background: linear-gradient(135deg, #dc3545, #c82333);
+}
+
+.season-compare-controls {
+    margin-top: 12px;
+    padding: 12px;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+}
+
+.time-sync-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.time-sync-row span:first-child {
+    font-size: 12px;
+    color: #666;
+    white-space: nowrap;
+}
+
+.time-sync-row input[type="range"] {
+    flex: 1;
+}
+
+.time-sync-row span:last-child {
+    font-size: 14px;
+    font-weight: bold;
+    color: var(--brand);
+    min-width: 50px;
+    text-align: right;
+}
+
+.play-btn {
+    width: 100%;
+    padding: 10px;
+    background: linear-gradient(135deg, #28a745, #218838);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+.play-btn:hover {
+    background: linear-gradient(135deg, #34ce57, #28a745);
+}
+
+.play-btn.playing {
+    background: linear-gradient(135deg, #ffc107, #e0a800);
+    color: #333;
+}
+
+/* 四宫格容器样式 */
+#season-compare-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 4px;
+    background: #1a1a1a;
+    z-index: 5;
+}
+
+.season-label {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 14px;
+    z-index: 10;
+    pointer-events: none;
+}
+
+/* ===== 天气系统样式 ===== */
+.weather-system .weather-config {
+    background: #f8f9fa;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+}
+
+#weatherSelect {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #dcdfe6;
+    border-radius: 8px;
+    background: white;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+#weatherSelect:hover {
+    border-color: var(--brand);
+}
+
+#weatherSelect:focus {
+    outline: none;
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px rgba(11, 116, 255, 0.1);
+}
+
+#weatherSelect option {
+    padding: 8px;
+}

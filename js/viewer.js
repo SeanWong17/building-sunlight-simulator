@@ -171,6 +171,7 @@
 
     // ========== 状态变量 ==========
     let LATITUDE = 36.65;
+    window.LATITUDE = LATITUDE; // 使全局可访问
     let showOwnOnly = false;
     let currentData = null;
     let sunlightResults = null; // 存储日照计算结果
@@ -749,6 +750,7 @@
             const lat = selectedOption.dataset.lat;
             if (lat) {
                 LATITUDE = parseFloat(lat);
+                window.LATITUDE = LATITUDE; // 更新全局变量
                 latInput.value = LATITUDE;
                 updateSun();
                 updateLatDisplay();
@@ -761,6 +763,7 @@
             const inputLat = parseFloat(this.value);
             if (!isNaN(inputLat) && inputLat >= -90 && inputLat <= 90) {
                 LATITUDE = inputLat;
+                window.LATITUDE = LATITUDE; // 更新全局变量
                 updateSun();
                 updateLatDisplay();
                 clearSunlightResults();
@@ -811,6 +814,7 @@
                 const data = JSON.parse(ev.target.result);
                 if (typeof data.latitude === 'number' && isFinite(data.latitude)) {
                     LATITUDE = data.latitude;
+                    window.LATITUDE = LATITUDE; // 更新全局变量
                     document.getElementById('latitudeInput').value = LATITUDE;
                     updateLatDisplay();
 
@@ -857,6 +861,9 @@
 
         if (!data || !Array.isArray(data.buildings) || data.buildings.length === 0) return;
 
+        // 确保建筑物组有名称，方便四季对比复制
+        buildingsGroup.name = 'buildingsGroup';
+        
         data.buildings.forEach((b, index) => {
             if (!b.shape || b.shape.length < 3) return;
 
@@ -1346,6 +1353,10 @@
     bindUI();
     setHour(10);
     updateSun();
+    
+    // 初始化新功能模块
+    initNewFeatures();
+    
     animate();
 
     // 尝试加载默认数据
@@ -1356,6 +1367,178 @@
         document.getElementById('empty-state').style.display = 'none';
     } else {
         console.log('未检测到 DEFAULT_DATA 变量，等待手动上传文件');
+    }
+
+    // ========== 新功能模块初始化 ==========
+    function initNewFeatures() {
+        // 初始化测量工具
+        if (typeof MeasurementTool !== 'undefined') {
+            MeasurementTool.init(scene, camera, renderer, buildingsGroup);
+            
+            // 设置测量完成回调
+            window.onMeasurementComplete = function(result) {
+                updateMeasurementUI(result);
+            };
+        }
+        
+        // 初始化天气系统
+        if (typeof WeatherSystem !== 'undefined') {
+            WeatherSystem.init(scene, camera, renderer, sunLight, ambientLight);
+        }
+        
+        // 初始化四季对比
+        if (typeof SeasonCompare !== 'undefined') {
+            SeasonCompare.init(scene, camera, renderer, controls, 'canvas-container');
+        }
+        
+        // 绑定新功能的UI事件
+        bindNewFeatureEvents();
+    }
+
+    // 绑定新功能事件
+    function bindNewFeatureEvents() {
+        // 测量工具开关
+        const toggleMeasurementBtn = document.getElementById('toggleMeasurementBtn');
+        if (toggleMeasurementBtn) {
+            toggleMeasurementBtn.addEventListener('click', function() {
+                if (typeof MeasurementTool !== 'undefined') {
+                    const isActive = MeasurementTool.toggle();
+                    this.classList.toggle('active', isActive);
+                    this.textContent = isActive ? 
+                        (i18n.getCurrentLanguage() === 'zh' ? '📏 关闭测量工具' : '📏 Disable Measurement') : 
+                        (i18n.getCurrentLanguage() === 'zh' ? '📏 开启测量工具' : '📏 Enable Measurement');
+                    
+                    if (!isActive) {
+                        document.getElementById('measurementResult').style.display = 'none';
+                        document.getElementById('clearMeasurementBtn').style.display = 'none';
+                    }
+                }
+            });
+        }
+        
+        // 清除测量按钮
+        const clearMeasurementBtn = document.getElementById('clearMeasurementBtn');
+        if (clearMeasurementBtn) {
+            clearMeasurementBtn.addEventListener('click', function() {
+                if (typeof MeasurementTool !== 'undefined') {
+                    MeasurementTool.clearMeasurement();
+                    document.getElementById('measurementResult').style.display = 'none';
+                    this.style.display = 'none';
+                }
+            });
+        }
+        
+        // 测量工具点击事件（在画布点击时）
+        renderer.domElement.addEventListener('click', function(event) {
+            if (typeof MeasurementTool !== 'undefined' && MeasurementTool.isToolActive()) {
+                // 阻止事件冒泡，避免触发其他点击事件
+                const handled = MeasurementTool.handleClick(event);
+                if (handled) {
+                    event.stopPropagation();
+                }
+            }
+        });
+        
+        // 天气系统选择
+        const weatherSelect = document.getElementById('weatherSelect');
+        if (weatherSelect) {
+            weatherSelect.addEventListener('change', function() {
+                if (typeof WeatherSystem !== 'undefined') {
+                    WeatherSystem.setWeather(this.value);
+                }
+            });
+        }
+        
+        // 四季对比开关
+        const toggleSeasonCompareBtn = document.getElementById('toggleSeasonCompareBtn');
+        if (toggleSeasonCompareBtn) {
+            toggleSeasonCompareBtn.addEventListener('click', function() {
+                if (typeof SeasonCompare !== 'undefined') {
+                    const isActive = SeasonCompare.toggle(currentData, LATITUDE);
+                    this.classList.toggle('active', isActive);
+                    
+                    const seasonControls = document.getElementById('seasonCompareControls');
+                    seasonControls.style.display = isActive ? 'block' : 'none';
+                    
+                    // 更新按钮文字
+                    const lang = i18n.getCurrentLanguage();
+                    this.textContent = isActive ? 
+                        (lang === 'zh' ? '🔲 关闭四宫格对比' : '🔲 Close Quad View') : 
+                        (lang === 'zh' ? '🔲 开启四宫格对比' : '🔲 Open Quad View');
+                    
+                    // 显示/隐藏主控制面板的时间滑块
+                    const timeBlock = document.getElementById('timeBlock');
+                    const timeDock = document.getElementById('timeDock');
+                    if (timeBlock) timeBlock.style.display = isActive ? 'none' : 'block';
+                    if (timeDock) timeDock.style.display = isActive ? 'none' : (window.innerWidth <= 600 ? 'flex' : 'none');
+                }
+            });
+        }
+        
+        // 同步时间滑块
+        const syncTimeSlider = document.getElementById('syncTimeSlider');
+        if (syncTimeSlider) {
+            syncTimeSlider.addEventListener('input', function() {
+                const hour = parseFloat(this.value);
+                if (typeof SeasonCompare !== 'undefined') {
+                    SeasonCompare.setTime(hour);
+                }
+                updateSyncTimeText(hour);
+            });
+        }
+        
+        // 同步播放按钮
+        const playSyncBtn = document.getElementById('playSyncBtn');
+        if (playSyncBtn) {
+            playSyncBtn.addEventListener('click', function() {
+                if (typeof SeasonCompare !== 'undefined') {
+                    const isPlaying = SeasonCompare.togglePlay();
+                    this.classList.toggle('playing', isPlaying);
+                    
+                    const lang = i18n.getCurrentLanguage();
+                    this.textContent = isPlaying ? 
+                        (lang === 'zh' ? '⏸ 暂停播放' : '⏸ Pause') : 
+                        (lang === 'zh' ? '▶ 同步播放' : '▶ Play');
+                }
+            });
+        }
+    }
+
+    // 更新测量结果显示
+    function updateMeasurementUI(result) {
+        const resultDiv = document.getElementById('measurementResult');
+        const distanceSpan = document.getElementById('measuredDistance');
+        const requiredSpan = document.getElementById('requiredSpacing');
+        const statusDiv = document.getElementById('measurementStatus');
+        const clearBtn = document.getElementById('clearMeasurementBtn');
+        
+        if (resultDiv && distanceSpan && requiredSpan && statusDiv) {
+            resultDiv.style.display = 'block';
+            clearBtn.style.display = 'block';
+            
+            distanceSpan.textContent = result.distance.toFixed(2) + 'm';
+            requiredSpan.textContent = result.requiredSpacing.toFixed(2) + 'm';
+            
+            const lang = i18n.getCurrentLanguage();
+            if (result.isCompliant) {
+                statusDiv.textContent = lang === 'zh' ? '✓ 符合日照间距要求' : '✓ Meets spacing requirements';
+                statusDiv.className = 'measurement-status compliant';
+            } else {
+                statusDiv.textContent = lang === 'zh' ? '✗ 不符合间距要求' : '✗ Does not meet requirements';
+                statusDiv.className = 'measurement-status non-compliant';
+            }
+        }
+    }
+
+    // 更新同步时间显示
+    function updateSyncTimeText(hour) {
+        const h = Math.floor(hour);
+        const m = Math.floor((hour - h) * 60);
+        const text = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        const timeText = document.getElementById('syncTimeText');
+        if (timeText) {
+            timeText.textContent = text;
+        }
     }
 
     // ========== 语言切换功能 ==========

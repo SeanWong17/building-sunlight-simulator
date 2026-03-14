@@ -99,7 +99,28 @@ const i18n = (function() {
                 errorNoData: '请先导入建筑数据',
                 errorNoBuilding: '没有找到本小区的建筑（isThisCommunity: true）',
                 errorParseFailed: 'JSON 解析失败，请检查文件格式',
-                errorCalcFailed: '计算过程中出错，请重试'
+                errorCalcFailed: '计算过程中出错，请重试',
+
+                // 楼间距测量
+                measurementLabel: '4. 楼间距测量',
+                toggleMeasurement: '📏 开启测量工具',
+                distanceLabel: '间距:',
+                requiredLabel: '要求:',
+                clearMeasurement: '清除测量',
+
+                // 四季对比
+                seasonCompareLabel: '5. 四季日照对比',
+                toggleSeasonCompare: '🔲 开启四宫格对比',
+                syncTimeLabel: '同步时间:',
+                playSync: '▶ 同步播放',
+
+                // 天气系统
+                weatherLabel: '6. 天气系统',
+                weatherSunny: '☀️ 晴天',
+                weatherCloudy: '☁️ 多云',
+                weatherOvercast: '🌥️ 阴天',
+                weatherRainy: '🌧️ 雨天',
+                weatherSnowy: '❄️ 雪天'
             },
 
             // 编辑器 (editor.html)
@@ -255,7 +276,28 @@ const i18n = (function() {
                 errorNoData: 'Please import building data first',
                 errorNoBuilding: 'No buildings found in this community (isThisCommunity: true)',
                 errorParseFailed: 'JSON parsing failed, please check file format',
-                errorCalcFailed: 'Error during calculation, please try again'
+                errorCalcFailed: 'Error during calculation, please try again',
+
+                // Building distance measurement
+                measurementLabel: '4. Building Distance',
+                toggleMeasurement: '📏 Enable Measurement',
+                distanceLabel: 'Distance:',
+                requiredLabel: 'Required:',
+                clearMeasurement: 'Clear Measurement',
+
+                // Season comparison
+                seasonCompareLabel: '5. Seasonal Comparison',
+                toggleSeasonCompare: '🔲 Open Quad View',
+                syncTimeLabel: 'Sync Time:',
+                playSync: '▶ Play',
+
+                // Weather system
+                weatherLabel: '6. Weather System',
+                weatherSunny: '☀️ Sunny',
+                weatherCloudy: '☁️ Cloudy',
+                weatherOvercast: '🌥️ Overcast',
+                weatherRainy: '🌧️ Rainy',
+                weatherSnowy: '❄️ Snowy'
             },
 
             // Editor (editor.html)

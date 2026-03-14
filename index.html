@@ -90,9 +90,59 @@
                 <div class="time-display" id="timeText">10:00</div>
             </div>
 
+            <!-- 楼间距测量工具 -->
+            <div class="control-group measurement-tool">
+                <label data-i18n="viewer.measurementLabel">4. 楼间距测量</label>
+                <div class="measurement-config">
+                    <button id="toggleMeasurementBtn" class="measurement-btn" data-i18n="viewer.toggleMeasurement">📏 开启测量工具</button>
+                    <div id="measurementResult" class="measurement-result" style="display:none;">
+                        <div class="measurement-info">
+                            <span class="measurement-label" data-i18n="viewer.distanceLabel">间距:</span>
+                            <span class="measurement-value" id="measuredDistance">--</span>
+                        </div>
+                        <div class="measurement-info">
+                            <span class="measurement-label" data-i18n="viewer.requiredLabel">要求:</span>
+                            <span class="measurement-value" id="requiredSpacing">--</span>
+                        </div>
+                        <div class="measurement-status" id="measurementStatus">--</div>
+                    </div>
+                    <button id="clearMeasurementBtn" class="clear-btn" style="display:none; margin-top:8px;" data-i18n="viewer.clearMeasurement">清除测量</button>
+                </div>
+            </div>
+
+            <!-- 四季对比分屏 -->
+            <div class="control-group season-compare">
+                <label data-i18n="viewer.seasonCompareLabel">5. 四季日照对比</label>
+                <div class="season-compare-config">
+                    <button id="toggleSeasonCompareBtn" class="season-compare-btn" data-i18n="viewer.toggleSeasonCompare">🔲 开启四宫格对比</button>
+                    <div id="seasonCompareControls" class="season-compare-controls" style="display:none;">
+                        <div class="time-sync-row">
+                            <span data-i18n="viewer.syncTimeLabel">同步时间:</span>
+                            <input type="range" id="syncTimeSlider" min="6" max="18" step="0.05" value="10">
+                            <span id="syncTimeText">10:00</span>
+                        </div>
+                        <button id="playSyncBtn" class="play-btn" data-i18n="viewer.playSync">▶ 同步播放</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 天气系统 -->
+            <div class="control-group weather-system">
+                <label data-i18n="viewer.weatherLabel">6. 天气系统</label>
+                <div class="weather-config">
+                    <select id="weatherSelect">
+                        <option value="sunny" data-i18n="viewer.weatherSunny">☀️ 晴天</option>
+                        <option value="cloudy" data-i18n="viewer.weatherCloudy">☁️ 多云</option>
+                        <option value="overcast" data-i18n="viewer.weatherOvercast">🌥️ 阴天</option>
+                        <option value="rainy" data-i18n="viewer.weatherRainy">🌧️ 雨天</option>
+                        <option value="snowy" data-i18n="viewer.weatherSnowy">❄️ 雪天</option>
+                    </select>
+                </div>
+            </div>
+
             <!-- 日照分析功能 -->
             <div class="control-group sunlight-analysis">
-                <label data-i18n="viewer.step4">4. 日照分析</label>
+                <label data-i18n="viewer.step4">7. 日照分析</label>
                 <div class="analysis-config">
                     <button id="calcSunlightBtn" class="calc-btn" data-i18n="viewer.calcButton">🔬 计算日照时长</button>
                     <div id="calcProgress" class="calc-progress" style="display:none;">
@@ -145,6 +195,9 @@
     <script src="js/utils.js"></script>
     <script src="js/cities.js"></script>
     <script src="js/i18n.js"></script>
+    <script src="js/measurement.js"></script>
+    <script src="js/weather.js"></script>
+    <script src="js/seasonCompare.js"></script>
     <script src="js/viewer.js"></script>
 </body>
 </html>
