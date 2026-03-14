@@ -115,6 +115,50 @@
                 </div>
             </div>
 
+            <div class="control-group">
+                <label data-i18n="viewer.measurementTool">楼间距测量工具</label>
+                <div class="measurement-controls">
+                    <button id="measureDistanceBtn" class="tool-btn">📏 测量楼间距</button>
+                    <button id="clearMeasurementBtn" class="tool-btn" style="margin-top: 5px;">🗑️ 清除测量</button>
+                    <div id="measurementResult" class="measurement-result" style="display:none; margin-top: 8px;">
+                        <div style="font-size: 14px; font-weight: bold; color: #2c3e50;">测量结果</div>
+                        <div id="distanceValue" style="margin: 5px 0; color: #3498db;">距离: --</div>
+                        <div id="complianceResult" style="margin: 5px 0;">合规性: --</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label data-i18n="viewer.seasonComparison">四季日照对比</label>
+                <div class="season-comparison-controls">
+                    <button id="toggleSplitViewBtn" class="tool-btn">🖼️ 四宫格对比视图</button>
+                    <div id="splitViewControls" style="display:none; margin-top: 8px;">
+                        <button id="syncAnimationBtn" class="tool-btn" style="width: 100%;">▶️ 同步播放四季动画</button>
+                        <div class="inline-row" style="margin-top: 8px;">
+                            <input type="checkbox" id="syncCameraToggle" checked>
+                            <span>同步相机控制</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label data-i18n="viewer.weatherSystem">天气系统</label>
+                <div class="weather-controls">
+                    <select id="weatherSelect">
+                        <option value="sunny" selected>☀️ 晴天</option>
+                        <option value="cloudy">☁️ 多云</option>
+                        <option value="overcast">🌥️ 阴天</option>
+                        <option value="rainy">🌧️ 雨天</option>
+                        <option value="snowy">❄️ 雪天</option>
+                    </select>
+                    <div style="margin-top: 8px;">
+                        <div style="font-size: 12px; color: #666; margin-bottom: 4px;">光照强度</div>
+                        <input type="range" id="lightIntensitySlider" min="0" max="2" step="0.1" value="1" style="width: 100%;">
+                    </div>
+                </div>
+            </div>
+
             <div class="legend">
                 <span data-i18n="viewer.tip">💡 提示: 拖动查看阴影变化</span>
             </div>

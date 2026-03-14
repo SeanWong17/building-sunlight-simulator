@@ -888,7 +888,7 @@
             const own = (typeof b.isThisCommunity === 'boolean') ? b.isThisCommunity : true;
 
             const node = new THREE.Group();
-            node.userData = { own, name: b.name || '', buildingIndex: index };
+            node.userData = { own, name: b.name || '', buildingIndex: index, shape: b.shape, height: totalHeight, floors: floors };
             buildingsGroup.add(node);
 
             let mesh;
@@ -1100,8 +1100,6 @@
     const mouse = new THREE.Vector2();
 
     function onCanvasClick(event) {
-        if (!sunlightResults || !showHeatmap) return;
-
         // 获取点击位置
         const rect = renderer.domElement.getBoundingClientRect();
         
@@ -1122,6 +1120,25 @@
         mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
         raycasterClick.setFromCamera(mouse, camera);
+
+        // 测量模式：选择楼栋
+        if (isMeasuring) {
+            const buildingMeshes = [];
+            buildingsGroup.traverse((obj) => {
+                if (obj.isMesh && obj.parent && obj.parent.userData && obj.parent.userData.hasOwnProperty('own')) {
+                    buildingMeshes.push(obj);
+                }
+            });
+            const intersects = raycasterClick.intersectObjects(buildingMeshes, true);
+            if (intersects.length > 0) {
+                handleBuildingSelection(intersects[0].object);
+            }
+            return;
+        }
+
+        // 日照热力图模式
+        if (!sunlightResults || !showHeatmap) return;
+        
         const intersects = raycasterClick.intersectObjects(heatmapGroup.children, false);
 
         if (intersects.length > 0) {
@@ -1346,7 +1363,6 @@
     bindUI();
     setHour(10);
     updateSun();
-    animate();
 
     // 尝试加载默认数据
     if (typeof DEFAULT_DATA !== 'undefined') {
@@ -1544,5 +1560,561 @@
         statsDiv.innerHTML = html;
         statsDiv.style.display = 'block';
     }
+
+    // ========== 楼间距测量工具 ==========
+    let isMeasuring = false;
+    let selectedBuilding1 = null;
+    let selectedBuilding2 = null;
+    let measurementLine = null;
+    let measurementLabel = null;
+    let shadowHighlightGroup = new THREE.Group();
+    scene.add(shadowHighlightGroup);
+
+    function initMeasurementTool() {
+        const measureBtn = document.getElementById('measureDistanceBtn');
+        const clearBtn = document.getElementById('clearMeasurementBtn');
+
+        measureBtn.addEventListener('click', () => {
+            isMeasuring = !isMeasuring;
+            if (isMeasuring) {
+                measureBtn.classList.add('active');
+                measureBtn.textContent = '🔴 点击选择楼栋';
+                clearMeasurement();
+            } else {
+                measureBtn.classList.remove('active');
+                measureBtn.textContent = '📏 测量楼间距';
+            }
+        });
+
+        clearBtn.addEventListener('click', clearMeasurement);
+    }
+
+    function clearMeasurement() {
+        if (selectedBuilding1) {
+            selectedBuilding1.traverse((child) => {
+                if (child.isMesh) {
+                    child.material.emissive = new THREE.Color(0x000000);
+                    child.material.emissiveIntensity = 0;
+                }
+            });
+        }
+        if (selectedBuilding2) {
+            selectedBuilding2.traverse((child) => {
+                if (child.isMesh) {
+                    child.material.emissive = new THREE.Color(0x000000);
+                    child.material.emissiveIntensity = 0;
+                }
+            });
+        }
+        selectedBuilding1 = null;
+        selectedBuilding2 = null;
+        if (measurementLine) {
+            scene.remove(measurementLine);
+            measurementLine = null;
+        }
+        if (measurementLabel) {
+            document.body.removeChild(measurementLabel);
+            measurementLabel = null;
+        }
+        clearGroup(shadowHighlightGroup);
+        document.getElementById('measurementResult').style.display = 'none';
+    }
+
+    function calculateMinimumDistance(building1, building2) {
+        let minDistance = Infinity;
+        const shape1 = building1.userData.shape;
+        const shape2 = building2.userData.shape;
+        
+        for (let i = 0; i < shape1.length; i++) {
+            for (let j = 0; j < shape2.length; j++) {
+                const p1 = new THREE.Vector2(shape1[i].x, shape1[i].y);
+                const p2 = new THREE.Vector2(shape2[j].x, shape2[j].y);
+                const dist = p1.distanceTo(p2);
+                minDistance = Math.min(minDistance, dist);
+            }
+        }
+        return minDistance;
+    }
+
+    function checkSunlightCompliance(distance, frontBuildingHeight) {
+        const tanLatitude = Math.tan(LATITUDE * Math.PI / 180);
+        const requiredDistance = frontBuildingHeight * tanLatitude;
+        return {
+            isCompliant: distance >= requiredDistance,
+            requiredDistance: requiredDistance,
+            ratio: distance / frontBuildingHeight
+        };
+    }
+
+    function createMeasurementLine(startPoint, endPoint, distance) {
+        if (measurementLine) scene.remove(measurementLine);
+        
+        const material = new THREE.LineBasicMaterial({ color: 0xe74c3c, linewidth: 3 });
+        const geometry = new THREE.BufferGeometry().setFromPoints([startPoint, endPoint]);
+        measurementLine = new THREE.Line(geometry, material);
+        scene.add(measurementLine);
+
+        if (!measurementLabel) {
+            measurementLabel = document.createElement('div');
+            measurementLabel.className = 'measurement-label';
+            document.body.appendChild(measurementLabel);
+        }
+        
+        const midPoint = new THREE.Vector3().addVectors(startPoint, endPoint).multiplyScalar(0.5);
+        updateMeasurementLabelPosition(midPoint, distance);
+    }
+
+    function updateMeasurementLabelPosition(position, distance) {
+        if (!measurementLabel) return;
+        
+        const vector = position.clone().project(camera);
+        const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+        const y = -(vector.y * 0.5 - 0.5) * window.innerHeight;
+        
+        measurementLabel.style.left = x + 'px';
+        measurementLabel.style.top = y + 'px';
+        measurementLabel.textContent = distance.toFixed(1) + ' 米';
+    }
+
+    function highlightShadowArea(frontBuilding, backBuilding) {
+        clearGroup(shadowHighlightGroup);
+        
+        const frontHeight = frontBuilding.userData.height || (frontBuilding.userData.floors * 3);
+        const tanLatitude = Math.tan(LATITUDE * Math.PI / 180);
+        const shadowLength = frontHeight / tanLatitude;
+        
+        const frontPos = frontBuilding.position.clone();
+        const shadowDir = new THREE.Vector3(0, 0, 1);
+        
+        const shape = frontBuilding.userData.shape;
+        const shadowShape = [];
+        
+        for (let i = 0; i < shape.length; i++) {
+            shadowShape.push(new THREE.Vector2(shape[i].x, shape[i].y));
+            shadowShape.push(new THREE.Vector2(shape[i].x + shadowDir.x * shadowLength, shape[i].y + shadowDir.z * shadowLength));
+        }
+
+        const geometry = new THREE.PlaneGeometry(1, 1);
+        const material = new THREE.MeshBasicMaterial({ 
+            color: 0xff0000, 
+            transparent: true, 
+            opacity: 0.2,
+            side: THREE.DoubleSide
+        });
+        
+        const extrudeSettings = { depth: 0.1, bevelEnabled: false };
+        const shapeGeom = new THREE.Shape(shadowShape.map(p => new THREE.Vector2(p.x, p.y)));
+        const shadowGeom = new THREE.ExtrudeGeometry(shapeGeom, extrudeSettings);
+        const shadowMesh = new THREE.Mesh(shadowGeom, material);
+        shadowMesh.rotation.x = -Math.PI / 2;
+        shadowHighlightGroup.add(shadowMesh);
+    }
+
+    function handleBuildingSelection(intersectedObject) {
+        if (!isMeasuring) return;
+
+        const building = intersectedObject.parent;
+        if (!building || building.type !== 'Group') return;
+
+        if (!selectedBuilding1) {
+            selectedBuilding1 = building;
+            building.traverse((child) => {
+                if (child.isMesh) {
+                    child.material.emissive = new THREE.Color(0xff0000);
+                    child.material.emissiveIntensity = 0.3;
+                }
+            });
+        } else if (!selectedBuilding2 && building !== selectedBuilding1) {
+            selectedBuilding2 = building;
+            building.traverse((child) => {
+                if (child.isMesh) {
+                    child.material.emissive = new THREE.Color(0x00ff00);
+                    child.material.emissiveIntensity = 0.3;
+                }
+            });
+
+            const distance = calculateMinimumDistance(selectedBuilding1, selectedBuilding2);
+            const frontBuilding = selectedBuilding1.position.z > selectedBuilding2.position.z ? selectedBuilding1 : selectedBuilding2;
+            const frontHeight = frontBuilding.userData.height || (frontBuilding.userData.floors * 3);
+            const compliance = checkSunlightCompliance(distance, frontHeight);
+
+            const startPos = selectedBuilding1.position.clone();
+            const endPos = selectedBuilding2.position.clone();
+            startPos.y = 2;
+            endPos.y = 2;
+            createMeasurementLine(startPos, endPos, distance);
+
+            highlightShadowArea(frontBuilding, frontBuilding === selectedBuilding1 ? selectedBuilding2 : selectedBuilding1);
+
+            showMeasurementResult(distance, compliance);
+        }
+    }
+
+    function showMeasurementResult(distance, compliance) {
+        const resultDiv = document.getElementById('measurementResult');
+        const distanceEl = document.getElementById('distanceValue');
+        const complianceEl = document.getElementById('complianceResult');
+
+        distanceEl.textContent = `距离: ${distance.toFixed(1)} 米`;
+        
+        if (compliance.isCompliant) {
+            complianceEl.innerHTML = `合规性: <span class="compliance-pass">✓ 符合要求</span><br>
+                要求间距: ${compliance.requiredDistance.toFixed(1)} 米<br>
+                间距系数: ${compliance.ratio.toFixed(2)}`;
+        } else {
+            complianceEl.innerHTML = `合规性: <span class="compliance-fail">✗ 不达标</span><br>
+                要求间距: ${compliance.requiredDistance.toFixed(1)} 米<br>
+                间距系数: ${compliance.ratio.toFixed(2)}`;
+        }
+
+        resultDiv.style.display = 'block';
+    }
+
+    // ========== 四季日照对比分屏 ==========
+    let isSplitView = false;
+    let splitViewScenes = [];
+    let splitViewCameras = [];
+    let splitViewRenderers = [];
+    let splitViewControls = [];
+
+    function initSeasonComparison() {
+        const toggleBtn = document.getElementById('toggleSplitViewBtn');
+        const syncBtn = document.getElementById('syncAnimationBtn');
+        const splitViewControlsDiv = document.getElementById('splitViewControls');
+
+        toggleBtn.addEventListener('click', () => {
+            isSplitView = !isSplitView;
+            if (isSplitView) {
+                createSplitView();
+                toggleBtn.classList.add('active');
+                toggleBtn.textContent = '◀️ 返回单视图';
+                splitViewControlsDiv.style.display = 'block';
+            } else {
+                destroySplitView();
+                toggleBtn.classList.remove('active');
+                toggleBtn.textContent = '🖼️ 四宫格对比视图';
+                splitViewControlsDiv.style.display = 'none';
+            }
+        });
+
+        syncBtn.addEventListener('click', startSyncAnimation);
+    }
+
+    function createSplitView() {
+        const container = document.createElement('div');
+        container.className = 'split-view-container active';
+        container.id = 'splitViewContainer';
+        document.body.appendChild(container);
+
+        const seasons = [
+            { name: '冬至', declination: -23.44, label: '冬至 (12月22日)' },
+            { name: '春分', declination: 0, label: '春分 (3月21日)' },
+            { name: '夏至', declination: 23.44, label: '夏至 (6月22日)' },
+            { name: '秋分', declination: 0, label: '秋分 (9月23日)' }
+        ];
+
+        for (let i = 0; i < 4; i++) {
+            const viewPort = document.createElement('div');
+            viewPort.className = 'split-view-port';
+            viewPort.innerHTML = `<div class="split-view-label">${seasons[i].label}</div>`;
+            container.appendChild(viewPort);
+
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(CONFIG.SCENE.BACKGROUND_COLOR);
+            scene.fog = new THREE.Fog(CONFIG.SCENE.FOG_COLOR, CONFIG.SCENE.FOG_NEAR, CONFIG.SCENE.FOG_FAR);
+            splitViewScenes.push(scene);
+
+            const splitCamera = new THREE.PerspectiveCamera(45, 1, 1, 5000);
+            splitCamera.position.copy(camera.position);
+            splitCamera.rotation.copy(camera.rotation);
+            splitViewCameras.push(splitCamera);
+
+            const renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth / 2, window.innerHeight / 2);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            viewPort.appendChild(renderer.domElement);
+            splitViewRenderers.push(renderer);
+
+            const control = new THREE.OrbitControls(splitCamera, renderer.domElement);
+            control.enableDamping = true;
+            control.maxPolarAngle = Math.PI / 2 - 0.1;
+            splitViewControls.push(control);
+
+            cloneSceneTo(scene);
+
+            const sunLight = new THREE.DirectionalLight(0xffffff, CONFIG.LIGHTING.SUN_INTENSITY);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            sunLight.shadow.bias = -0.0001;
+            sunLight.shadow.camera.left = -1000;
+            sunLight.shadow.camera.right = 1000;
+            sunLight.shadow.camera.top = 1000;
+            sunLight.shadow.camera.bottom = -1000;
+            sunLight.shadow.camera.near = 1;
+            sunLight.shadow.camera.far = 3000;
+            scene.add(sunLight);
+
+            const ambientLight = new THREE.AmbientLight(CONFIG.LIGHTING.AMBIENT_COLOR, CONFIG.LIGHTING.AMBIENT_INTENSITY);
+            scene.add(ambientLight);
+
+            scene.userData.sunLight = sunLight;
+            scene.userData.declination = seasons[i].declination;
+        }
+    }
+
+    function cloneSceneTo(targetScene) {
+        const planeClone = plane.clone();
+        planeClone.material = plane.material.clone();
+        planeClone.receiveShadow = true;
+        targetScene.add(planeClone);
+
+        const gridClone = gridHelper.clone();
+        targetScene.add(gridClone);
+
+        const compassClone = compass.clone(true);
+        targetScene.add(compassClone);
+
+        for (let i = 0; i < buildingsGroup.children.length; i++) {
+            const buildingGroup = buildingsGroup.children[i];
+            const buildingClone = new THREE.Group();
+            buildingClone.position.copy(buildingGroup.position);
+            buildingClone.rotation.copy(buildingGroup.rotation);
+            buildingClone.scale.copy(buildingGroup.scale);
+            buildingGroup.traverse((object) => {
+                if (object.isMesh) {
+                    const clone = object.clone();
+                    if (Array.isArray(object.material)) {
+                        clone.material = object.material.map(m => m.clone());
+                    } else {
+                        clone.material = object.material.clone();
+                    }
+                    clone.castShadow = object.castShadow;
+                    clone.receiveShadow = object.receiveShadow;
+                    clone.position.copy(object.position);
+                    clone.rotation.copy(object.rotation);
+                    clone.scale.copy(object.scale);
+                    buildingClone.add(clone);
+                } else if (object.type === 'Sprite') {
+                    const clone = object.clone();
+                    clone.position.copy(object.position);
+                    buildingClone.add(clone);
+                }
+            });
+            targetScene.add(buildingClone);
+        }
+    }
+
+    function destroySplitView() {
+        const container = document.getElementById('splitViewContainer');
+        if (container) {
+            document.body.removeChild(container);
+        }
+        splitViewScenes = [];
+        splitViewCameras = [];
+        splitViewRenderers = [];
+        splitViewControls = [];
+    }
+
+    function updateSplitView() {
+        if (!isSplitView) return;
+
+        for (let i = 0; i < 4; i++) {
+            splitViewCameras[i].position.copy(camera.position);
+            splitViewCameras[i].rotation.copy(camera.rotation);
+            splitViewControls[i].target.copy(controls.target);
+            splitViewControls[i].update();
+        }
+
+        const currentHour = getCurrentHour();
+        for (let i = 0; i < 4; i++) {
+            const scene = splitViewScenes[i];
+            const declination = scene.userData.declination;
+            const sunDir = calculateSunDirection(currentHour, LATITUDE, declination);
+            if (sunDir) {
+                const distance = 1500;
+                scene.userData.sunLight.position.set(
+                    sunDir.x * distance,
+                    sunDir.y * distance,
+                    sunDir.z * distance
+                );
+                scene.userData.sunLight.intensity = CONFIG.LIGHTING.SUN_INTENSITY;
+            } else {
+                scene.userData.sunLight.intensity = 0;
+            }
+            scene.userData.sunLight.target.position.set(0, 0, 0);
+            scene.userData.sunLight.target.updateMatrixWorld();
+            splitViewRenderers[i].render(scene, splitViewCameras[i]);
+        }
+    }
+
+    function startSyncAnimation() {
+        let currentTime = 6;
+        const interval = setInterval(() => {
+            currentTime += 0.1;
+            if (currentTime > 18) {
+                clearInterval(interval);
+                return;
+            }
+            // 更新所有视口的时间
+            document.getElementById('timeSlider').value = currentTime;
+            setTimeText(currentTime);
+            updateSun();
+        }, 50);
+    }
+
+    // ========== 天气系统 ==========
+    let currentWeather = 'sunny';
+    let rainParticles = null;
+    let snowParticles = null;
+    let fogEffect = null;
+
+    function initWeatherSystem() {
+        const weatherSelect = document.getElementById('weatherSelect');
+        const intensitySlider = document.getElementById('lightIntensitySlider');
+
+        weatherSelect.addEventListener('change', (e) => {
+            currentWeather = e.target.value;
+            applyWeather(currentWeather);
+        });
+
+        intensitySlider.addEventListener('input', (e) => {
+            const intensity = parseFloat(e.target.value);
+            sunLight.intensity = CONFIG.LIGHTING.SUN_INTENSITY * intensity;
+            ambientLight.intensity = CONFIG.LIGHTING.AMBIENT_INTENSITY * intensity;
+        });
+    }
+
+    function applyWeather(weather) {
+        clearWeatherEffects();
+
+        switch(weather) {
+            case 'sunny':
+                scene.fog = new THREE.Fog(CONFIG.SCENE.FOG_COLOR, CONFIG.SCENE.FOG_NEAR, CONFIG.SCENE.FOG_FAR);
+                sunLight.intensity = CONFIG.LIGHTING.SUN_INTENSITY;
+                ambientLight.intensity = CONFIG.LIGHTING.AMBIENT_INTENSITY;
+                break;
+            case 'cloudy':
+                scene.fog = new THREE.Fog(0xcccccc, 100, 800);
+                sunLight.intensity = CONFIG.LIGHTING.SUN_INTENSITY * 0.6;
+                ambientLight.intensity = CONFIG.LIGHTING.AMBIENT_INTENSITY * 0.8;
+                break;
+            case 'overcast':
+                scene.fog = new THREE.Fog(0xaaaaaa, 50, 500);
+                sunLight.intensity = CONFIG.LIGHTING.SUN_INTENSITY * 0.3;
+                ambientLight.intensity = CONFIG.LIGHTING.AMBIENT_INTENSITY * 0.6;
+                break;
+            case 'rainy':
+                scene.fog = new THREE.Fog(0x888888, 200, 1500);
+                sunLight.intensity = CONFIG.LIGHTING.SUN_INTENSITY * 0.4;
+                ambientLight.intensity = CONFIG.LIGHTING.AMBIENT_INTENSITY * 0.5;
+                createRainParticles();
+                break;
+            case 'snowy':
+                scene.fog = new THREE.Fog(0xeeeeee, 200, 1500);
+                sunLight.intensity = CONFIG.LIGHTING.SUN_INTENSITY * 0.5;
+                ambientLight.intensity = CONFIG.LIGHTING.AMBIENT_INTENSITY * 0.7;
+                createSnowParticles();
+                break;
+        }
+    }
+
+    function clearWeatherEffects() {
+        if (rainParticles) {
+            scene.remove(rainParticles);
+            rainParticles = null;
+        }
+        if (snowParticles) {
+            scene.remove(snowParticles);
+            snowParticles = null;
+        }
+    }
+
+    function createRainParticles() {
+        const particleCount = 5000;
+        const particles = new THREE.BufferGeometry();
+        const positions = new Float32Array(particleCount * 3);
+
+        for (let i = 0; i < particleCount * 3; i += 3) {
+            positions[i] = Math.random() * 4000 - 2000;
+            positions[i + 1] = Math.random() * 600;
+            positions[i + 2] = Math.random() * 4000 - 2000;
+        }
+
+        particles.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+        const material = new THREE.PointsMaterial({
+            color: 0x88aadd,
+            size: 12,
+            transparent: true,
+            opacity: 0.7,
+            sizeAttenuation: true
+        });
+
+        rainParticles = new THREE.Points(particles, material);
+        scene.add(rainParticles);
+    }
+
+    function createSnowParticles() {
+        const particleCount = 3000;
+        const particles = new THREE.BufferGeometry();
+        const positions = new Float32Array(particleCount * 3);
+
+        for (let i = 0; i < particleCount * 3; i += 3) {
+            positions[i] = Math.random() * 4000 - 2000;
+            positions[i + 1] = Math.random() * 600;
+            positions[i + 2] = Math.random() * 4000 - 2000;
+        }
+
+        particles.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+        const material = new THREE.PointsMaterial({
+            color: 0xffffff,
+            size: 15,
+            transparent: true,
+            opacity: 0.8,
+            sizeAttenuation: true
+        });
+
+        snowParticles = new THREE.Points(particles, material);
+        scene.add(snowParticles);
+    }
+
+    function updateWeatherParticles() {
+        if (rainParticles) {
+            const positions = rainParticles.geometry.attributes.position.array;
+            for (let i = 1; i < positions.length; i += 3) {
+                positions[i] -= 2;
+                if (positions[i] < 0) positions[i] = 500;
+            }
+            rainParticles.geometry.attributes.position.needsUpdate = true;
+        }
+        if (snowParticles) {
+            const positions = snowParticles.geometry.attributes.position.array;
+            for (let i = 0; i < positions.length; i += 3) {
+                positions[i] += Math.sin(Date.now() * 0.001 + i) * 0.1;
+                positions[i + 1] -= 0.5;
+                if (positions[i + 1] < 0) positions[i + 1] = 500;
+            }
+            snowParticles.geometry.attributes.position.needsUpdate = true;
+        }
+    }
+
+    // ========== 修改原有的 animate 函数以支持新功能 ==========
+    function enhancedAnimate() {
+        requestAnimationFrame(enhancedAnimate);
+        controls.update();
+        renderer.render(scene, camera);
+        updateWeatherParticles();
+        updateSplitView();
+    }
+
+    // 初始化所有新功能
+    initMeasurementTool();
+    initSeasonComparison();
+    initWeatherSystem();
+
+    enhancedAnimate();
 
 })();

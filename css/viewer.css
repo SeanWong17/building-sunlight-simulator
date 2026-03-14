@@ -690,3 +690,126 @@ h2 {
     border-color: var(--brand);
     box-shadow: 0 0 0 3px rgba(11, 116, 255, 0.1);
 }
+
+.tool-btn {
+    width: 100%;
+    padding: 10px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+    transition: all 0.2s;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.tool-btn:hover {
+    background: linear-gradient(135deg, #768eed, #865bb2);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.tool-btn.active {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    box-shadow: 0 2px 8px rgba(231, 76, 60, 0.3);
+}
+
+.measurement-result {
+    padding: 8px;
+    background: #f0f7ff;
+    border-radius: 6px;
+    border: 1px solid #c5dcf7;
+    font-size: 13px;
+}
+
+.measurement-result .compliance-pass {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.measurement-result .compliance-fail {
+    color: #dc3545;
+    font-weight: bold;
+}
+
+.split-view-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: none;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 2px;
+    background: #333;
+}
+
+.split-view-container.active {
+    display: grid;
+}
+
+.split-view-port {
+    position: relative;
+    background: #000;
+}
+
+.split-view-label {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+    z-index: 5;
+}
+
+.measurement-line {
+    color: #e74c3c;
+    line-width: 3;
+}
+
+.measurement-label {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.9);
+    color: #e74c3c;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+    pointer-events: none;
+    z-index: 100;
+}
+
+.weather-controls {
+    background: #f8f9fa;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+
+.particle-system {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.fog-effect {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.1);
+    pointer-events: none;
+    z-index: 2;
+}
