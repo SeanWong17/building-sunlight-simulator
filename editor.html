@@ -1,223 +1,240 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <title>楼盘规划图配置器</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="css/editor.css">
 </head>
+
 <body>
 
-<!-- GitHub 图标链接 -->
-<a href="https://github.com/SeanWong17/building-sunlight-simulator" target="_blank" rel="noopener noreferrer" class="github-link" title="View on GitHub" aria-label="View source on GitHub">
-    <svg width="32" height="32" viewBox="0 0 16 16" fill="currentColor">
-        <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
-    </svg>
-</a>
+    <!-- GitHub 图标链接 -->
+    <a href="https://github.com/wingkinl/building-sunlight-simulator" target="_blank" rel="noopener noreferrer"
+        class="github-link" title="View on GitHub" aria-label="View source on GitHub">
+        <svg width="32" height="32" viewBox="0 0 16 16" fill="currentColor">
+            <path
+                d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+        </svg>
+    </a>
 
-<div id="canvas-wrapper">
-    <div id="empty-tip" data-i18n="editor.emptyTip">请在右侧上传图片开始规划</div>
-    <canvas id="editorCanvas"></canvas>
-    <div id="zoom-info"><span data-i18n="editor.zoomInfo">缩放</span>: 0%</div>
-</div>
-
-<div id="sidebar">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-        <h3 data-i18n="editor.pageTitle">🛠️ 楼盘数据配置</h3>
-        <div class="lang-switcher">
-            <button class="lang-btn" data-lang="zh">中文</button>
-            <button class="lang-btn" data-lang="en">EN</button>
-        </div>
+    <div id="canvas-wrapper">
+        <div id="empty-tip" data-i18n="editor.emptyTip">请在右侧上传图片开始规划</div>
+        <canvas id="editorCanvas"></canvas>
+        <div id="zoom-info"><span data-i18n="editor.zoomInfo">缩放</span>: 0%</div>
     </div>
 
-    <div id="topPane">
-        <div class="step" id="step-upload">
-            <label data-i18n="editor.step1Title">1. 上传规划图/总平图</label>
-            <input type="file" id="fileInput" accept="image/*">
-            <div class="muted" data-i18n="editor.step1Hint">支持拖拽、缩放、绘制多边形表示楼栋轮廓。</div>
-        </div>
-
-        <div class="step" id="step-scale">
-            <label data-i18n="editor.step2Title">2. 标定比例尺</label>
-            <div class="muted" style="margin-bottom:5px;">
-                <span data-i18n="editor.scaleStatus">状态</span>: <span id="scaleStatus" data-i18n="editor.scaleNotSet">未标定</span>
-            </div>
-            <button id="btnStartScale" disabled data-i18n="editor.startScale">开始标定 (点击两点)</button>
-            <div id="scaleInputArea" style="display:none; margin-top:5px;">
-                <label data-i18n="editor.realDistance">两点间实际距离 (米):</label>
-                <input type="number" id="realDistance" value="50" step="0.01" min="0">
-                <button id="btnConfirmScale" class="secondary" data-i18n="editor.confirmScale">确认比例</button>
+    <div id="sidebar">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h3 data-i18n="editor.pageTitle">🛠️ 楼盘数据配置</h3>
+            <div class="lang-switcher">
+                <button class="lang-btn" data-lang="zh">中文</button>
+                <button class="lang-btn" data-lang="en">EN</button>
             </div>
         </div>
 
-        <div class="step active" id="step-draw">
-            <label data-i18n="editor.step3Title">3. 绘制楼栋</label>
-            <div class="muted" style="margin-bottom:5px;">
-                <span style="color:#28a745;" data-i18n="editor.step3Hint">🖱️ 滚轮缩放，按住中键或空格拖拽视图</span><br>
-                <span data-i18n="editor.step3Operation">操作: 左键加点，左键双击结束；右键撤销上个点。</span>
+        <div id="topPane">
+            <div class="step" id="step-upload">
+                <label data-i18n="editor.step1Title">1. 上传规划图/总平图</label>
+                <input type="file" id="fileInput" accept="image/*">
+                <div class="muted" data-i18n="editor.step1Hint">支持拖拽、缩放、绘制多边形表示楼栋轮廓。</div>
             </div>
-            <button id="btnDrawMode" class="secondary" data-i18n="editor.modeIdle">当前: ✋ 浏览模式</button>
-            <button id="btnResetView" class="info" style="margin-top:5px;" data-i18n="editor.resetView">⟲ 重置视角</button>
-        </div>
 
-        <div class="step" id="step-defaults">
-            <label data-i18n="editor.step4Title">4. 全局参数 & 默认值</label>
-            
-            <div class="location-config">
-                <label data-i18n="editor.projectLocation">📍 项目位置（用于日照计算）</label>
-                <div class="location-row">
+            <div class="step" id="step-scale">
+                <label data-i18n="editor.step2Title">2. 标定比例尺</label>
+                <div class="muted" style="margin-bottom:5px;">
+                    <span data-i18n="editor.scaleStatus">状态</span>: <span id="scaleStatus"
+                        data-i18n="editor.scaleNotSet">未标定</span>
+                </div>
+                <button id="btnStartScale" disabled data-i18n="editor.startScale">开始标定 (点击两点)</button>
+                <div id="scaleInputArea" style="display:none; margin-top:5px;">
+                    <label data-i18n="editor.realDistance">两点间实际距离 (米):</label>
+                    <input type="number" id="realDistance" value="50" step="0.01" min="0">
+                    <button id="btnConfirmScale" class="secondary" data-i18n="editor.confirmScale">确认比例</button>
+                </div>
+            </div>
+
+            <div class="step active" id="step-draw">
+                <label data-i18n="editor.step3Title">3. 绘制楼栋</label>
+                <div class="muted" style="margin-bottom:5px;">
+                    <span style="color:#28a745;" data-i18n="editor.step3Hint">🖱️ 滚轮缩放，按住中键或空格拖拽视图</span><br>
+                    <span data-i18n="editor.step3Operation">操作: 左键加点，左键双击结束；右键撤销上个点。</span>
+                </div>
+                <button id="btnDrawMode" class="secondary" data-i18n="editor.modeIdle">当前: ✋ 浏览模式</button>
+                <button id="btnResetView" class="info" style="margin-top:5px;" data-i18n="editor.resetView">⟲
+                    重置视角</button>
+            </div>
+
+            <div class="step" id="step-defaults">
+                <label data-i18n="editor.step4Title">4. 全局参数 & 默认值</label>
+
+                <div class="location-config">
+                    <label data-i18n="editor.projectLocation">📍 项目位置（用于日照计算）</label>
+                    <div class="location-row">
+                        <div class="field">
+                            <span class="muted" data-i18n="editor.selectCity">选择城市</span>
+                            <select id="citySelect">
+                                <option value="" data-i18n="common.loading">-- 加载中 --</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <span class="muted" data-i18n="editor.orInputLat">或输入纬度</span>
+                            <input type="number" id="projectLat" value="36.65" step="0.01" min="-90" max="90">
+                        </div>
+                    </div>
+                </div>
+
+                <label style="font-size:12px; color:#555; margin-bottom:5px;"
+                    data-i18n="editor.defaultParams">新楼栋默认参数:</label>
+                <div class="inline-inputs">
                     <div class="field">
-                        <span class="muted" data-i18n="editor.selectCity">选择城市</span>
-                        <select id="citySelect">
-                            <option value="" data-i18n="common.loading">-- 加载中 --</option>
-                        </select>
+                        <span class="muted" data-i18n="editor.defaultFloors">默认层数</span>
+                        <input type="number" id="defFloors" value="18" min="1" step="1">
                     </div>
                     <div class="field">
-                        <span class="muted" data-i18n="editor.orInputLat">或输入纬度</span>
-                        <input type="number" id="projectLat" value="36.65" step="0.01" min="-90" max="90">
+                        <span class="muted" data-i18n="editor.defaultFloorHeight">默认层高(米)</span>
+                        <input type="number" id="defFloorHeight" value="3" min="1" step="0.01">
+                    </div>
+                    <div class="field">
+                        <span class="muted" data-i18n="editor.defaultUnits">默认户数/层</span>
+                        <input type="number" id="defUnits" value="2" min="1" step="1">
                     </div>
                 </div>
-            </div>
-
-            <label style="font-size:12px; color:#555; margin-bottom:5px;" data-i18n="editor.defaultParams">新楼栋默认参数:</label>
-            <div class="inline-inputs">
-                <div class="field">
-                    <span class="muted" data-i18n="editor.defaultFloors">默认层数</span>
-                    <input type="number" id="defFloors" value="18" min="1" step="1">
-                </div>
-                <div class="field">
-                    <span class="muted" data-i18n="editor.defaultFloorHeight">默认层高(米)</span>
-                    <input type="number" id="defFloorHeight" value="3" min="1" step="0.01">
-                </div>
-                <div class="field">
-                    <span class="muted" data-i18n="editor.defaultUnits">默认户数/层</span>
-                    <input type="number" id="defUnits" value="2" min="1" step="1">
-                </div>
-            </div>
-            <div class="inline-row">
-                <label style="margin:0; font-weight:normal;">
-                    <input type="checkbox" id="defIsThisCommunity" checked> <span data-i18n="editor.defaultIsOwn">默认标记为本小区</span>
-                </label>
-            </div>
-            <div class="inline-row">
-                <label style="margin:0; font-weight:normal;">
-                    <input type="checkbox" id="chkUseDefaults" checked> <span data-i18n="editor.useDefaults">新楼栋使用默认值</span>
-                </label>
-                <button id="btnApplyDefaultsAll" class="btn-outline" style="width:auto;" data-i18n="editor.applyToAll">应用到所有楼栋</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="resizer" id="outerResizer" title="拖动以调整区域高度"></div>
-
-    <div id="bottomPane">
-        <div class="step" id="step-table" style="margin:0;">
-            <label data-i18n="editor.step5Title">5. 楼栋参数表（统一填写/编辑）</label>
-        </div>
-
-        <div class="resizer" id="tableResizer" title="拖动以调整表格高度"></div>
-
-        <div id="table-wrapper">
-            <table>
-                <thead>
-                    <tr>
-                        <th style="width:200px;" data-i18n="editor.tableName">名称（可编辑）</th>
-                        <th style="width:90px;" data-i18n="editor.tableFloors">层数</th>
-                        <th style="width:110px;" data-i18n="editor.tableFloorHeight">层高(米)</th>
-                        <th style="width:90px;" data-i18n="editor.tableUnits">户/层</th>
-                        <th style="width:84px;" data-i18n="editor.tableIsOwn">本小区</th>
-                        <th style="width:80px;" data-i18n="editor.tableActions">操作</th>
-                    </tr>
-                </thead>
-                <tbody id="tableBody"></tbody>
-            </table>
-        </div>
-
-        <div class="inline-row" style="margin: 0;">
-            <input type="file" id="jsonImportInput" accept=".json" style="margin:0;">
-            <button id="btnImportJson" class="secondary" style="width:auto; margin:0;" data-i18n="editor.importJsonButton">导入 JSON</button>
-        </div>
-
-        <div class="inline-row" style="margin: 0;">
-            <span class="muted" style="margin:0;" data-i18n="editor.exportFilenameLabel">导出文件名</span>
-            <input type="text" id="exportFilename" value="buildings_config.json" style="margin:0;">
-        </div>
-
-        <button id="btnExport" class="success" style="margin-top: 0;" data-i18n="editor.exportButton">导出 JSON 配置</button>
-    </div>
-</div>
-
-<div id="splitModalOverlay" class="modal-overlay" style="display:none;">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="splitModalTitle">
-        <div class="modal-header">
-            <div id="splitModalTitle" class="modal-title" data-i18n="editor.splitModalTitle">分户分割</div>
-            <button id="splitModalClose" class="modal-close" type="button" aria-label="close">×</button>
-        </div>
-        <div class="modal-body">
-            <div class="modal-row">
-                <div class="modal-field">
-                    <div class="modal-label" data-i18n="editor.splitFloor">楼层</div>
-                    <select id="splitFloorSelect"></select>
-                </div>
-                <div class="modal-field">
-                    <div class="modal-label" data-i18n="editor.tableFloors">层数</div>
-                    <input id="splitFloorsInput" type="number" min="1" step="1">
-                </div>
-                <div class="modal-field">
-                    <div class="modal-label" data-i18n="editor.splitUnits">户数/层</div>
-                    <div id="splitUnitsText" class="modal-text"></div>
-                </div>
-            </div>
-
-            <div class="split-preview-wrap">
-                <div class="modal-label" data-i18n="editor.splitPreview">分割示意</div>
-                <canvas id="splitPreviewCanvas" class="split-preview-canvas" width="720" height="260"></canvas>
-            </div>
-
-            <div class="split-bar-wrap">
-                <div id="splitBar" class="split-bar" aria-label="split bar"></div>
-            </div>
-
-            <div class="modal-row modal-actions">
-                <button id="splitResetEqual" class="secondary" type="button" data-i18n="editor.splitResetEqual">等分</button>
-                <button id="splitApplyAllFloors" class="btn-outline" type="button" data-i18n="editor.splitApplyAllFloors">应用到所有楼层</button>
-                <div class="split-angle-inline">
-                    <span class="split-angle-label" data-i18n="editor.splitAngle">分割角度</span>
-                    <input id="splitAngleSlider" class="split-angle-slider" type="range" min="-180" max="180" step="1" value="0">
-                    <input id="splitAngleInput" class="split-angle-input" type="number" step="1" min="-180" max="180" value="0">
-                </div>
-            </div>
-
-            <div class="split-table-wrap">
-                <div class="split-table-toolbar">
-                    <label class="inline-row" style="margin:0; font-weight:normal;">
-                        <input type="checkbox" id="splitUseAreasChk">
-                        <span data-i18n="editor.splitUseAreas">按面积输入并实时换算</span>
+                <div class="inline-row">
+                    <label style="margin:0; font-weight:normal;">
+                        <input type="checkbox" id="defIsThisCommunity" checked> <span
+                            data-i18n="editor.defaultIsOwn">默认标记为本小区</span>
                     </label>
                 </div>
-                <table class="split-table">
+                <div class="inline-row">
+                    <label style="margin:0; font-weight:normal;">
+                        <input type="checkbox" id="chkUseDefaults" checked> <span
+                            data-i18n="editor.useDefaults">新楼栋使用默认值</span>
+                    </label>
+                    <button id="btnApplyDefaultsAll" class="btn-outline" style="width:auto;"
+                        data-i18n="editor.applyToAll">应用到所有楼栋</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="resizer" id="outerResizer" title="拖动以调整区域高度"></div>
+
+        <div id="bottomPane">
+            <div class="step" id="step-table" style="margin:0;">
+                <label data-i18n="editor.step5Title">5. 楼栋参数表（统一填写/编辑）</label>
+            </div>
+
+            <div class="resizer" id="tableResizer" title="拖动以调整表格高度"></div>
+
+            <div id="table-wrapper">
+                <table>
                     <thead>
-                        <tr id="splitTableHeadRow">
-                            <th data-i18n="editor.splitUnitIndex">户号(1→N)</th>
-                            <th data-i18n="editor.splitRatio">比例(%)</th>
-                            <th id="splitAreaTh" data-i18n="editor.splitArea">面积(㎡)</th>
+                        <tr>
+                            <th style="width:200px;" data-i18n="editor.tableName">名称（可编辑）</th>
+                            <th style="width:90px;" data-i18n="editor.tableFloors">层数</th>
+                            <th style="width:110px;" data-i18n="editor.tableFloorHeight">层高(米)</th>
+                            <th style="width:90px;" data-i18n="editor.tableUnits">户/层</th>
+                            <th style="width:84px;" data-i18n="editor.tableIsOwn">本小区</th>
+                            <th style="width:80px;" data-i18n="editor.tableActions">操作</th>
                         </tr>
                     </thead>
-                    <tbody id="splitTableBody"></tbody>
+                    <tbody id="tableBody"></tbody>
                 </table>
             </div>
 
-            <div class="modal-row modal-actions">
-                <button id="splitSave" class="success" type="button" data-i18n="common.save">保存</button>
+            <div class="inline-row" style="margin: 0;">
+                <input type="file" id="jsonImportInput" accept=".json" style="margin:0;">
+                <button id="btnImportJson" class="secondary" style="width:auto; margin:0;"
+                    data-i18n="editor.importJsonButton">导入 JSON</button>
+            </div>
+
+            <div class="inline-row" style="margin: 0;">
+                <span class="muted" style="margin:0;" data-i18n="editor.exportFilenameLabel">导出文件名</span>
+                <input type="text" id="exportFilename" value="buildings_config.json" style="margin:0;">
+            </div>
+
+            <button id="btnExport" class="success" style="margin-top: 0;" data-i18n="editor.exportButton">导出 JSON
+                配置</button>
+        </div>
+    </div>
+
+    <div id="splitModalOverlay" class="modal-overlay" style="display:none;">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="splitModalTitle">
+            <div class="modal-header">
+                <div id="splitModalTitle" class="modal-title" data-i18n="editor.splitModalTitle">分户分割</div>
+                <button id="splitModalClose" class="modal-close" type="button" aria-label="close">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-row">
+                    <div class="modal-field">
+                        <div class="modal-label" data-i18n="editor.splitFloor">楼层</div>
+                        <select id="splitFloorSelect"></select>
+                    </div>
+                    <div class="modal-field">
+                        <div class="modal-label" data-i18n="editor.tableFloors">层数</div>
+                        <input id="splitFloorsInput" type="number" min="1" step="1">
+                    </div>
+                    <div class="modal-field">
+                        <div class="modal-label" data-i18n="editor.splitUnits">户数/层</div>
+                        <div id="splitUnitsText" class="modal-text"></div>
+                    </div>
+                </div>
+
+                <div class="split-preview-wrap">
+                    <div class="modal-label" data-i18n="editor.splitPreview">分割示意</div>
+                    <canvas id="splitPreviewCanvas" class="split-preview-canvas" width="720" height="260"></canvas>
+                </div>
+
+                <div class="split-bar-wrap">
+                    <div id="splitBar" class="split-bar" aria-label="split bar"></div>
+                </div>
+
+                <div class="modal-row modal-actions">
+                    <button id="splitResetEqual" class="secondary" type="button"
+                        data-i18n="editor.splitResetEqual">等分</button>
+                    <button id="splitApplyAllFloors" class="btn-outline" type="button"
+                        data-i18n="editor.splitApplyAllFloors">应用到所有楼层</button>
+                    <div class="split-angle-inline">
+                        <span class="split-angle-label" data-i18n="editor.splitAngle">分割角度</span>
+                        <input id="splitAngleSlider" class="split-angle-slider" type="range" min="-180" max="180"
+                            step="1" value="0">
+                        <input id="splitAngleInput" class="split-angle-input" type="number" step="1" min="-180"
+                            max="180" value="0">
+                    </div>
+                </div>
+
+                <div class="split-table-wrap">
+                    <div class="split-table-toolbar">
+                        <label class="inline-row" style="margin:0; font-weight:normal;">
+                            <input type="checkbox" id="splitUseAreasChk">
+                            <span data-i18n="editor.splitUseAreas">按面积输入并实时换算</span>
+                        </label>
+                    </div>
+                    <table class="split-table">
+                        <thead>
+                            <tr id="splitTableHeadRow">
+                                <th data-i18n="editor.splitUnitIndex">户号(1→N)</th>
+                                <th data-i18n="editor.splitRatio">比例(%)</th>
+                                <th id="splitAreaTh" data-i18n="editor.splitArea">面积(㎡)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="splitTableBody"></tbody>
+                    </table>
+                </div>
+
+                <div class="modal-row modal-actions">
+                    <button id="splitSave" class="success" type="button" data-i18n="common.save">保存</button>
+                </div>
             </div>
         </div>
     </div>
-</div>
 
-<script src="js/config.js"></script>
-<script src="js/utils.js"></script>
-<script src="js/cities.js"></script>
-<script src="js/i18n.js"></script>
-<script src="js/editor.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/cities.js"></script>
+    <script src="js/i18n.js"></script>
+    <script src="js/editor.js"></script>
 </body>
+
 </html>

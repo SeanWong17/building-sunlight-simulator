@@ -18,7 +18,7 @@
   <a href="https://threejs.org/">
     <img src="https://img.shields.io/badge/Three.js-r128-black?style=flat-square&logo=three.js" alt="Made with Three.js">
   </a>
-  <a href="https://github.com/seanwong17/building-sunlight-simulator/pulls">
+  <a href="https://github.com/wingkinl/building-sunlight-simulator/pulls">
     <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square" alt="PRs Welcome">
   </a>
 </p>
@@ -74,7 +74,7 @@
 
 ### 1. 获取项目
 ```bash
-git clone [https://github.com/seanwong17/building-sunlight-simulator.git](https://github.com/seanwong17/building-sunlight-simulator.git)
+git clone [https://github.com/wingkinl/building-sunlight-simulator.git](https://github.com/wingkinl/building-sunlight-simulator.git)
 # 或者直接下载 ZIP 解压
 ```
 
@@ -189,7 +189,7 @@ building-sunlight-simulator/
 
 欢迎提交 Issue 或 Pull Request。
 
-* **Issues**: [Bug 反馈与功能建议](https://github.com/seanwong17/building-sunlight-simulator/issues)
+* **Issues**: [Bug 反馈与功能建议](https://github.com/wingkinl/building-sunlight-simulator/issues)
 
 ---
 

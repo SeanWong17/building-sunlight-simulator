@@ -18,7 +18,7 @@
   <a href="https://threejs.org/">
     <img src="https://img.shields.io/badge/Three.js-r128-black?style=flat-square&logo=three.js" alt="Made with Three.js">
   </a>
-  <a href="https://github.com/seanwong17/building-sunlight-simulator/pulls">
+  <a href="https://github.com/wingkinl/building-sunlight-simulator/pulls">
     <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square" alt="PRs Welcome">
   </a>
 </p>
@@ -74,7 +74,7 @@ The project consists of two core files: `editor.html` (Data Producer) and `index
 
 ### 1. Get the Project
 ```bash
-git clone [https://github.com/seanwong17/building-sunlight-simulator.git](https://github.com/seanwong17/building-sunlight-simulator.git)
+git clone [https://github.com/wingkinl/building-sunlight-simulator.git](https://github.com/wingkinl/building-sunlight-simulator.git)
 # Or download the ZIP directly
 ```
 
@@ -189,7 +189,7 @@ building-sunlight-simulator/
 
 Issues and Pull Requests are welcome!
 
-* **Issues**: [Bug reports & Feature requests](https://github.com/seanwong17/building-sunlight-simulator/issues)
+* **Issues**: [Bug reports & Feature requests](https://github.com/wingkinl/building-sunlight-simulator/issues)
 
 ---
 
