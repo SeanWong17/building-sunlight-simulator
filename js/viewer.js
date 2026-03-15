@@ -785,16 +785,29 @@
 
             mesh.position.set(point.wallDataX + nx * offset, wallHeight, point.wallDataY + ny * offset);
             const up = new THREE.Vector3(0, 1, 0);
-            const xAxis = new THREE.Vector3(point.tangent?.x || 1, 0, point.tangent?.y || 0);
-            if (xAxis.lengthSq() < 1e-8) xAxis.set(1, 0, 0);
-            xAxis.normalize();
-            let zAxis = xAxis.clone().cross(up);
             const outward3 = new THREE.Vector3(nx, 0, ny);
-            if (outward3.lengthSq() > 1e-8 && zAxis.dot(outward3) < 0) {
-                xAxis.negate();
-                zAxis = xAxis.clone().cross(up);
+
+            let xAxis;
+            if (outward3.lengthSq() > 1e-8) {
+                outward3.normalize();
+                // Build a stable basis from the wall normal to avoid gimbal edge cases on E/W facades.
+                xAxis = new THREE.Vector3().crossVectors(up, outward3);
+                if (xAxis.lengthSq() < 1e-8) {
+                    xAxis.set(1, 0, 0);
+                }
+                xAxis.normalize();
+
+                const tangent3 = new THREE.Vector3(point.tangent?.x || 1, 0, point.tangent?.y || 0);
+                if (tangent3.lengthSq() > 1e-8 && xAxis.dot(tangent3) < 0) {
+                    xAxis.negate();
+                }
+            } else {
+                xAxis = new THREE.Vector3(point.tangent?.x || 1, 0, point.tangent?.y || 0);
+                if (xAxis.lengthSq() < 1e-8) xAxis.set(1, 0, 0);
+                xAxis.normalize();
             }
-            zAxis.normalize();
+
+            const zAxis = new THREE.Vector3().crossVectors(xAxis, up).normalize();
             const m = new THREE.Matrix4().makeBasis(xAxis, up, zAxis);
             mesh.setRotationFromMatrix(m);
 
