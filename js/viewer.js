@@ -1,7 +1,7 @@
 /**
  * 楼盘采光可视化 - 主逻辑（含日照分析功能）
  */
-(function() {
+(function () {
     'use strict';
 
     // ========== 场景初始化 ==========
@@ -25,10 +25,10 @@
 
     // 地面
     const planeGeometry = new THREE.PlaneGeometry(4000, 4000);
-    const planeMaterial = new THREE.MeshStandardMaterial({ 
-        color: CONFIG.MATERIALS.GROUND_COLOR, 
-        roughness: 0.95, 
-        metalness: 0.0 
+    const planeMaterial = new THREE.MeshStandardMaterial({
+        color: CONFIG.MATERIALS.GROUND_COLOR,
+        roughness: 0.95,
+        metalness: 0.0
     });
     const plane = new THREE.Mesh(planeGeometry, planeMaterial);
     plane.rotation.x = -Math.PI / 2;
@@ -42,37 +42,37 @@
     // 创建罗盘指南针
     function createCompass() {
         const compassGroup = new THREE.Group();
-        
+
         // 罗盘底座 - 圆形平台
         const baseGeometry = new THREE.CylinderGeometry(20, 20, 0.5, 32);
-        const baseMaterial = new THREE.MeshStandardMaterial({ 
-            color: 0xffffff, 
-            roughness: 0.3, 
-            metalness: 0.1 
+        const baseMaterial = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            roughness: 0.3,
+            metalness: 0.1
         });
         const base = new THREE.Mesh(baseGeometry, baseMaterial);
         base.position.y = 0.25;
         compassGroup.add(base);
-        
+
         // 罗盘刻度盘
         const canvas = document.createElement('canvas');
         canvas.width = 512;
         canvas.height = 512;
         const ctx = canvas.getContext('2d');
-        
+
         // 背景
         ctx.fillStyle = '#f8f9fa';
         ctx.beginPath();
         ctx.arc(256, 256, 256, 0, Math.PI * 2);
         ctx.fill();
-        
+
         // 外圈
         ctx.strokeStyle = '#2c3e50';
         ctx.lineWidth = 4;
         ctx.beginPath();
         ctx.arc(256, 256, 250, 0, Math.PI * 2);
         ctx.stroke();
-        
+
         // 刻度和方位
         const directions = [
             { angle: 0, label: 'N', color: '#e74c3c', size: 48 },
@@ -80,19 +80,19 @@
             { angle: 180, label: 'S', color: '#34495e', size: 36 },
             { angle: 270, label: 'W', color: '#34495e', size: 36 }
         ];
-        
+
         // 绘制刻度
         for (let i = 0; i < 360; i += 10) {
             const angle = (i - 90) * Math.PI / 180;
             const isMain = i % 30 === 0;
             const length = isMain ? 30 : 15;
             const width = isMain ? 3 : 1;
-            
+
             const x1 = 256 + Math.cos(angle) * 220;
             const y1 = 256 + Math.sin(angle) * 220;
             const x2 = 256 + Math.cos(angle) * (220 - length);
             const y2 = 256 + Math.sin(angle) * (220 - length);
-            
+
             ctx.strokeStyle = '#34495e';
             ctx.lineWidth = width;
             ctx.beginPath();
@@ -100,30 +100,30 @@
             ctx.lineTo(x2, y2);
             ctx.stroke();
         }
-        
+
         // 绘制方位文字
         directions.forEach(dir => {
             const angle = (dir.angle - 90) * Math.PI / 180;
             const x = 256 + Math.cos(angle) * 170;
             const y = 256 + Math.sin(angle) * 170;
-            
+
             ctx.fillStyle = dir.color;
             ctx.font = `bold ${dir.size}px Arial`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(dir.label, x, y);
         });
-        
+
         // 中心装饰
         ctx.fillStyle = '#34495e';
         ctx.beginPath();
         ctx.arc(256, 256, 15, 0, Math.PI * 2);
         ctx.fill();
-        
+
         const texture = new THREE.CanvasTexture(canvas);
         const discGeometry = new THREE.CircleGeometry(19.5, 64);
-        const discMaterial = new THREE.MeshStandardMaterial({ 
-            map: texture, 
+        const discMaterial = new THREE.MeshStandardMaterial({
+            map: texture,
             roughness: 0.4,
             metalness: 0.1
         });
@@ -131,7 +131,7 @@
         disc.rotation.x = -Math.PI / 2;
         disc.position.y = 0.6;
         compassGroup.add(disc);
-        
+
         // 指北针 - 红色箭头
         const arrowShape = new THREE.Shape();
         arrowShape.moveTo(0, 12);
@@ -139,12 +139,12 @@
         arrowShape.lineTo(0, -1);
         arrowShape.lineTo(2, 0);
         arrowShape.closePath();
-        
+
         const arrowGeometry = new THREE.ExtrudeGeometry(arrowShape, {
             depth: 1,
             bevelEnabled: false
         });
-        const arrowMaterial = new THREE.MeshStandardMaterial({ 
+        const arrowMaterial = new THREE.MeshStandardMaterial({
             color: 0xe74c3c,
             roughness: 0.3,
             metalness: 0.2
@@ -153,7 +153,7 @@
         arrow.rotation.x = -Math.PI / 2;
         arrow.position.y = 1.2;
         compassGroup.add(arrow);
-        
+
         compassGroup.position.set(0, 0.5, 180);
         return compassGroup;
     }
@@ -178,7 +178,7 @@
     let customDeclination = null; // 存储自定义日期的赤纬角
 
     // ========== 纹理与材质工具 ==========
-    function createFacadeTexture(floors, unitsPerFloor) {
+    function createFacadeTexture(floors, unitsPerFloor, unitRatiosPerFloor) {
         const floorPx = 28;
         const width = 512;
         const height = Math.max(floors * floorPx, 4);
@@ -201,9 +201,12 @@
 
             const nUnits = Math.max(1, unitsPerFloor[f] || 1);
             if (nUnits > 1) {
-                const step = width / nUnits;
-                for (let i = 1; i < nUnits; i++) {
-                    const x = Math.round(i * step);
+                const ratios = normalizeUnitRatios(unitRatiosPerFloor?.[f], nUnits);
+                let acc = 0;
+                for (let i = 0; i < nUnits - 1; i++) {
+                    const r = ratios ? ratios[i] : (1.0 / nUnits);
+                    acc += r;
+                    const x = Math.round(acc * width);
                     ctx.fillStyle = 'rgba(35,45,60,0.6)';
                     ctx.fillRect(x - 1, y0, 2, bandH);
                     ctx.fillStyle = 'rgba(255,255,255,0.22)';
@@ -227,10 +230,10 @@
         return tex;
     }
 
-    const roofMaterial = new THREE.MeshStandardMaterial({ 
-        color: CONFIG.MATERIALS.ROOF_COLOR, 
-        roughness: 0.9, 
-        metalness: 0.0 
+    const roofMaterial = new THREE.MeshStandardMaterial({
+        color: CONFIG.MATERIALS.ROOF_COLOR,
+        roughness: 0.9,
+        metalness: 0.0
     });
 
     function createEdgeLines(geometry, color = 0x435061, opacity = 0.5) {
@@ -277,32 +280,44 @@
         return sprite;
     }
 
-    function makeUVGenerator(minX, maxX, minY, maxY, depth) {
-        const rangeX = Math.max(1e-6, maxX - minX);
-        const rangeY = Math.max(1e-6, maxY - minY);
-        const invDepth = depth > 0 ? 1 / depth : 1;
+    function makeUVGenerator(shape, totalHeight, axis) {
+        let minProj = Infinity;
+        let maxProj = -Infinity;
+
+        // Calculate min and max projection of the ORIGINAL 2D shape on the split axis
+        for (let i = 0; i < shape.length; i++) {
+            const proj = dot2(shape[i], axis);
+            if (proj < minProj) minProj = proj;
+            if (proj > maxProj) maxProj = proj;
+        }
+
+        const spanProj = Math.max(1e-6, maxProj - minProj);
+        const invDepth = totalHeight > 0 ? 1 / totalHeight : 1;
 
         return {
-            generateTopUV: function(geometry, vertices, a, b, c) {
-                const ax = vertices[a * 3], ay = vertices[a * 3 + 1];
-                const bx = vertices[b * 3], by = vertices[b * 3 + 1];
-                const cx = vertices[c * 3], cy = vertices[c * 3 + 1];
+            generateTopUV: function (geometry, vertices, a, b, c) {
                 return [
-                    new THREE.Vector2((ax - minX) / rangeX, (ay - minY) / rangeY),
-                    new THREE.Vector2((bx - minX) / rangeX, (by - minY) / rangeY),
-                    new THREE.Vector2((cx - minX) / rangeX, (cy - minY) / rangeY),
+                    new THREE.Vector2(0, 0),
+                    new THREE.Vector2(1, 0),
+                    new THREE.Vector2(0, 1)
                 ];
             },
-            generateSideWallUV: function(geometry, vertices, a, b, c, d) {
-                const ax = vertices[a * 3], az = vertices[a * 3 + 2];
-                const bx = vertices[b * 3], bz = vertices[b * 3 + 2];
-                const cx = vertices[c * 3], cz = vertices[c * 3 + 2];
-                const dx = vertices[d * 3], dz = vertices[d * 3 + 2];
+            generateSideWallUV: function (geometry, vertices, a, b, c, d) {
+                const ax = vertices[a * 3], ay = vertices[a * 3 + 1], az = vertices[a * 3 + 2];
+                const bx = vertices[b * 3], by = vertices[b * 3 + 1], bz = vertices[b * 3 + 2];
+                const cx = vertices[c * 3], cy = vertices[c * 3 + 1], cz = vertices[c * 3 + 2];
+                const dx = vertices[d * 3], dy = vertices[d * 3 + 1], dz = vertices[d * 3 + 2];
 
-                const uA = (ax - minX) / rangeX;
-                const uB = (bx - minX) / rangeX;
-                const uC = (cx - minX) / rangeX;
-                const uD = (dx - minX) / rangeX;
+                // Since extrude negates the y component, undo it when reconstructing 2D shape coords
+                const projA = dot2({ x: ax, y: -ay }, axis);
+                const projB = dot2({ x: bx, y: -by }, axis);
+                const projC = dot2({ x: cx, y: -cy }, axis);
+                const projD = dot2({ x: dx, y: -dy }, axis);
+
+                const uA = (maxProj - projA) / spanProj;
+                const uB = (maxProj - projB) / spanProj;
+                const uC = (maxProj - projC) / spanProj;
+                const uD = (maxProj - projD) / spanProj;
 
                 const vA = az * invDepth;
                 const vB = bz * invDepth;
@@ -335,26 +350,66 @@
         }
     }
 
+    function normalizeUnitRatios(ratios, units) {
+        if (!Array.isArray(ratios) || ratios.length !== units) return null;
+        const cleaned = ratios.map(v => Math.max(0, Number(v) || 0));
+        const sum = cleaned.reduce((a, b) => a + b, 0);
+        if (sum <= 1e-9) return null;
+        return cleaned.map(v => v / sum);
+    }
+
+    function clampAngleDeg(deg) {
+        const d = Number(deg);
+        if (!isFinite(d)) return 0;
+        let v = Math.round(d);
+        while (v > 180) v -= 360;
+        while (v < -180) v += 360;
+        return v;
+    }
+
+    function axisFromAngleDeg(angleDeg) {
+        const rad = clampAngleDeg(angleDeg) * Math.PI / 180;
+        return { x: Math.cos(rad), y: Math.sin(rad) };
+    }
+
+    function dot2(p, axis) {
+        return (p?.x || 0) * (axis?.x || 0) + (p?.y || 0) * (axis?.y || 0);
+    }
+
     // ========== 日照分析核心功能 ==========
 
     /**
      * 找到建筑物的南面（y值最大的边）
      * 返回南面的两个端点，按从西到东排序
      */
-    function findSouthFace(shape) {
-        if (shape.length < 3) return null;
+    /**
+     * 计算所有受光面的检测点，基于户的投影占比切分
+     */
+    function calculateSamplingPoints(building, buildingIndex) {
+        const points = [];
+        const floors = Math.max(1, parseInt(building.floors || 1, 10));
+        const floorHeight = building.floorHeight || 3;
+        const units = Math.max(1, parseInt(building.units || 1, 10));
+
+        const axis = axisFromAngleDeg(building.unitSplitAngleDeg || 0);
+
+        if (!building.shape || building.shape.length < 3) return points;
+
         let signedArea = 0;
-        for (let i = 0; i < shape.length; i++) {
-            const p1 = shape[i];
-            const p2 = shape[(i + 1) % shape.length];
+        for (let i = 0; i < building.shape.length; i++) {
+            const p1 = building.shape[i];
+            const p2 = building.shape[(i + 1) % building.shape.length];
             signedArea += p1.x * p2.y - p2.x * p1.y;
         }
         const isCCW = signedArea > 0;
-        const southSegments = [];
+        const segments = [];
 
-        for (let i = 0; i < shape.length; i++) {
-            const p1 = shape[i];
-            const p2 = shape[(i + 1) % shape.length];
+        let minProj = Infinity;
+        let maxProj = -Infinity;
+
+        for (let i = 0; i < building.shape.length; i++) {
+            const p1 = building.shape[i];
+            const p2 = building.shape[(i + 1) % building.shape.length];
             const dx = p2.x - p1.x;
             const dy = p2.y - p1.y;
             const len = Math.hypot(dx, dy);
@@ -363,178 +418,94 @@
             const leftNormal = { x: -dy / len, y: dx / len };
             const rightNormal = { x: dy / len, y: -dx / len };
             const outward = isCCW ? rightNormal : leftNormal;
-            if (outward.y <= 0.2) continue;
 
-            let start = p1;
-            let end = p2;
-            if (start.x > end.x || (start.x === end.x && start.y > end.y)) {
-                [start, end] = [end, start];
-            }
-            southSegments.push({ start, end, len, outward });
+            const start = p1;
+            const end = p2;
+            const a = dot2(start, axis);
+            const b = dot2(end, axis);
+
+            if (a < minProj) minProj = a;
+            if (a > maxProj) maxProj = a;
+            if (b < minProj) minProj = b;
+            if (b > maxProj) maxProj = b;
+
+            segments.push({ start, end, len, outward, pA: a, pB: b });
         }
-
-        if (southSegments.length === 0) {
-            const edges = [];
-            for (let i = 0; i < shape.length; i++) {
-                const p1 = shape[i];
-                const p2 = shape[(i + 1) % shape.length];
-                const midY = (p1.y + p2.y) / 2;
-                edges.push({ p1, p2, midY });
-            }
-            edges.sort((a, b) => b.midY - a.midY);
-            const southEdge = edges[0];
-            let start = southEdge.p1;
-            let end = southEdge.p2;
-            if (start.x > end.x) {
-                [start, end] = [end, start];
-            }
-            return { start, end };
-        }
-
-        southSegments.sort((a, b) => ((a.start.x + a.end.x) / 2) - ((b.start.x + b.end.x) / 2));
-        const totalLength = southSegments.reduce((sum, s) => sum + s.len, 0);
-        let cursor = 0;
-        southSegments.forEach(s => {
-            s.accStart = cursor;
-            cursor += s.len;
-            s.accEnd = cursor;
-        });
-
-        function getPointAtDistance(distanceFromWest) {
-            const d = Math.min(Math.max(distanceFromWest, 0), totalLength);
-            for (const seg of southSegments) {
-                if (d <= seg.accEnd || seg === southSegments[southSegments.length - 1]) {
-                    const local = seg.len > 0 ? (d - seg.accStart) / seg.len : 0;
-                    const x = seg.start.x + (seg.end.x - seg.start.x) * local;
-                    const y = seg.start.y + (seg.end.y - seg.start.y) * local;
-                    const tx = seg.len > 0 ? (seg.end.x - seg.start.x) / seg.len : 1;
-                    const ty = seg.len > 0 ? (seg.end.y - seg.start.y) / seg.len : 0;
-                    return { x, y, outward: seg.outward, tangent: { x: tx, y: ty }, segmentLength: seg.len };
-                }
-            }
-            const last = southSegments[southSegments.length - 1];
-            const tx = last.len > 0 ? (last.end.x - last.start.x) / last.len : 1;
-            const ty = last.len > 0 ? (last.end.y - last.start.y) / last.len : 0;
-            return { x: last.end.x, y: last.end.y, outward: last.outward, tangent: { x: tx, y: ty }, segmentLength: last.len };
-        }
-
-        function allocateUnits(units) {
-            const segCount = southSegments.length;
-            if (units <= 0) return new Array(segCount).fill(0);
-            const counts = new Array(segCount).fill(0);
-            if (units < segCount) {
-                const order = southSegments
-                    .map((s, idx) => ({ idx, len: s.len }))
-                    .sort((a, b) => b.len - a.len)
-                    .slice(0, units);
-                order.forEach(o => { counts[o.idx] = 1; });
-                return counts;
-            }
-
-            counts.fill(1);
-            let remaining = units - segCount;
-            if (remaining <= 0) return counts;
-
-            const weights = southSegments.map(s => s.len);
-            const wSum = weights.reduce((a, b) => a + b, 0) || 1;
-            const remainders = [];
-            let used = 0;
-            for (let i = 0; i < segCount; i++) {
-                const raw = (weights[i] / wSum) * remaining;
-                const base = Math.floor(raw);
-                counts[i] += base;
-                used += base;
-                remainders.push({ idx: i, r: raw - base });
-            }
-            let left = remaining - used;
-            remainders.sort((a, b) => b.r - a.r);
-            for (let i = 0; i < remainders.length && left > 0; i++) {
-                counts[remainders[i].idx] += 1;
-                left--;
-            }
-            return counts;
-        }
-
-        function getUnitPlacements(units) {
-            const counts = allocateUnits(units);
-            const placements = [];
-            for (let segIdx = 0; segIdx < southSegments.length; segIdx++) {
-                const seg = southSegments[segIdx];
-                const k = counts[segIdx];
-                if (k <= 0) continue;
-                const dx = seg.end.x - seg.start.x;
-                const dy = seg.end.y - seg.start.y;
-                const tx = seg.len > 0 ? dx / seg.len : 1;
-                const ty = seg.len > 0 ? dy / seg.len : 0;
-                const cellWidth = seg.len > 0 ? (seg.len / k) * 0.95 : 1;
-                for (let i = 0; i < k; i++) {
-                    const t = (i + 0.5) / k;
-                    placements.push({
-                        x: seg.start.x + dx * t,
-                        y: seg.start.y + dy * t,
-                        outward: seg.outward,
-                        tangent: { x: tx, y: ty },
-                        cellWidth
-                    });
-                }
-            }
-            return placements;
-        }
-
-        return { start: southSegments[0].start, end: southSegments[southSegments.length - 1].end, southSegments, totalLength, getPointAtDistance, getUnitPlacements };
-    }
-
-    /**
-     * 计算每户的采光检测点 - 户号改为从东向西
-     */
-    function calculateSamplingPoints(building, buildingIndex) {
-        const points = [];
-        const floors = Math.max(1, parseInt(building.floors || 1, 10));
-        const floorHeight = building.floorHeight || 3;
-        const units = Math.max(1, parseInt(building.units || 1, 10));
-
-        const southFace = findSouthFace(building.shape);
-        if (!southFace) return points;
-        const placements = typeof southFace.getUnitPlacements === 'function' ? southFace.getUnitPlacements(units) : null;
+        const spanProj = maxProj - minProj;
 
         for (let floor = 0; floor < floors; floor++) {
             const windowHeight = floor * floorHeight + floorHeight * 0.4 + 1.2;
+            const ratios = normalizeUnitRatios(building.unitRatiosPerFloor?.[floor], units);
 
-            for (let unit = 0; unit < units; unit++) {
-                let x, y, outward;
-                if (placements && placements.length === units) {
-                    const p = placements[units - 1 - unit];
-                    x = p.x;
-                    y = p.y;
-                    outward = p.outward;
-                } else {
-                    if (typeof southFace.getPointAtDistance === 'function' && typeof southFace.totalLength === 'number' && southFace.totalLength > 0) {
-                        const d = southFace.totalLength * (units - (unit + 1) + 0.5) / units;
-                        const hit = southFace.getPointAtDistance(d);
-                        x = hit.x;
-                        y = hit.y;
-                        outward = hit.outward;
-                    } else {
-                    const sDx = southFace.end.x - southFace.start.x;
-                    const sDy = southFace.end.y - southFace.start.y;
-                    const len = Math.sqrt(sDx * sDx + sDy * sDy);
-                    const t = (units - 1 - unit + 0.5) / units;
-                    x = southFace.start.x + sDx * t;
-                    y = southFace.start.y + sDy * t;
-                    outward = len > 1e-6 ? { x: -sDy / len, y: sDx / len } : { x: 0, y: 1 };
+            // Compute boundaries for this floor
+            const boundaries = [maxProj + 1e-4];
+            let cum = 0;
+            for (let i = 0; i < units; i++) {
+                const r = ratios ? ratios[i] : (1.0 / units);
+                cum += r;
+                boundaries.push(maxProj - cum * spanProj);
+            }
+            boundaries[units] -= 1e-4; // Ensure last boundary covers everything
+
+            for (const seg of segments) {
+                // Determine split points on this segment
+                const ts = [0, 1];
+                if (spanProj > 1e-6 && Math.abs(seg.pB - seg.pA) > 1e-6) {
+                    for (const b of boundaries) {
+                        const t = (b - seg.pA) / (seg.pB - seg.pA);
+                        if (t > 0 && t < 1) ts.push(t);
+                    }
+                }
+                ts.sort((a, b) => a - b);
+
+                // unique ts
+                const uniqueTs = [];
+                for (let i = 0; i < ts.length; i++) {
+                    if (i === 0 || ts[i] - uniqueTs[uniqueTs.length - 1] > 1e-6) {
+                        uniqueTs.push(ts[i]);
                     }
                 }
 
-                points.push({
-                    buildingIndex,
-                    buildingName: building.name || `建筑${buildingIndex + 1}`,
-                    floor: floor + 1,
-                    unit: unit + 1, // 此时 unit 1 对应最东侧
-                    x: x + (outward?.x || 0) * 0.5,
-                    y: y + (outward?.y || 0) * 0.5,
-                    z: windowHeight,
-                    sunlightHours: 0
-                });
+                for (let i = 0; i < uniqueTs.length - 1; i++) {
+                    const tStart = uniqueTs[i];
+                    const tEnd = uniqueTs[i + 1];
+                    const tMid = (tStart + tEnd) / 2;
+                    const projMid = seg.pA + tMid * (seg.pB - seg.pA);
+
+                    let unitIdx = units - 1;
+                    for (let u = 0; u < units; u++) {
+                        if (projMid <= boundaries[u] + 1e-5 && projMid >= boundaries[u + 1] - 1e-5) {
+                            unitIdx = u;
+                            break;
+                        }
+                    }
+
+                    const subLen = (tEnd - tStart) * seg.len;
+                    if (subLen < 0.1) continue; // Skip very small face fragments
+
+                    const midX = seg.start.x + tMid * (seg.end.x - seg.start.x);
+                    const midY = seg.start.y + tMid * (seg.end.y - seg.start.y);
+
+                    const dx = seg.end.x - seg.start.x;
+                    const dy = seg.end.y - seg.start.y;
+                    const tangent = seg.len > 1e-6 ? { x: dx / seg.len, y: dy / seg.len } : { x: 1, y: 0 };
+
+                    points.push({
+                        buildingIndex,
+                        buildingName: building.name || `建筑${buildingIndex + 1}`,
+                        floor: floor + 1,
+                        unit: unitIdx + 1, // unit1 对应投影高的一侧（通常是东/南侧）
+                        x: midX + seg.outward.x * 0.5,
+                        y: midY + seg.outward.y * 0.5,
+                        z: windowHeight,
+                        wallDataX: midX,
+                        wallDataY: midY,
+                        outward: seg.outward,
+                        tangent: tangent,
+                        cellWidth: subLen * 0.95,
+                        sunlightHours: 0
+                    });
+                }
             }
         }
         return points;
@@ -614,7 +585,7 @@
             declination = parseFloat(seasonValue);
             if (isNaN(declination)) declination = 0;
         }
-        
+
         const timeStep = CONFIG.SUNLIGHT_ANALYSIS.TIME_INTERVAL; // 固定6分钟间隔
 
         // 收集本小区建筑的采样点
@@ -675,12 +646,18 @@
             buildings: {}
         };
 
-        // 按建筑汇总
+        let sumMaxForAll = 0;
+        let totalUniqUnits = 0;
+        let belowStd = 0;
+        let globalMin = Infinity;
+        let globalMax = 0;
+
+        // Group points by building and unit
         allPoints.forEach(p => {
             if (!results.buildings[p.buildingName]) {
                 results.buildings[p.buildingName] = {
                     name: p.buildingName,
-                    units: [],
+                    unitsMap: new Map(),
                     minHours: Infinity,
                     maxHours: 0,
                     avgHours: 0,
@@ -688,29 +665,44 @@
                 };
             }
             const bldg = results.buildings[p.buildingName];
-            bldg.units.push(p);
-            bldg.minHours = Math.min(bldg.minHours, p.sunlightHours);
-            bldg.maxHours = Math.max(bldg.maxHours, p.sunlightHours);
-            bldg.avgHours += p.sunlightHours;
-            bldg.totalUnits++;
+            const key = `${p.floor}-${p.unit}`;
+            if (!bldg.unitsMap.has(key)) bldg.unitsMap.set(key, []);
+            bldg.unitsMap.get(key).push(p);
         });
 
-        // 计算平均值
-        for (const key of Object.keys(results.buildings)) {
-            const b = results.buildings[key];
-            if (b.totalUnits > 0) {
-                b.avgHours = b.avgHours / b.totalUnits;
+        // Compute aggregations at unit level using max face
+        for (const bName of Object.keys(results.buildings)) {
+            const bldg = results.buildings[bName];
+            let bldgSumMax = 0;
+
+            for (const pts of bldg.unitsMap.values()) {
+                const unitMaxH = Math.max(...pts.map(p => p.sunlightHours));
+                pts.forEach(p => p.unitMaxHours = unitMaxH); // Set to point for UI
+
+                bldg.minHours = Math.min(bldg.minHours, unitMaxH);
+                bldg.maxHours = Math.max(bldg.maxHours, unitMaxH);
+                bldgSumMax += unitMaxH;
+                bldg.totalUnits++;
+
+                globalMin = Math.min(globalMin, unitMaxH);
+                globalMax = Math.max(globalMax, unitMaxH);
+                sumMaxForAll += unitMaxH;
+                totalUniqUnits++;
+
+                if (unitMaxH < 2) belowStd++;
             }
+
+            if (bldg.totalUnits > 0) {
+                bldg.avgHours = bldgSumMax / bldg.totalUnits;
+            }
+            delete bldg.unitsMap; // tidy up
         }
 
-        // 全局统计
-        results.totalUnits = allPoints.length;
-        results.minHours = Math.min(...allPoints.map(p => p.sunlightHours));
-        results.maxHours = Math.max(...allPoints.map(p => p.sunlightHours));
-        results.avgHours = allPoints.reduce((sum, p) => sum + p.sunlightHours, 0) / allPoints.length;
-
-        // 统计不满足标准的户数（冬至日照不足2小时）
-        results.belowStandard = allPoints.filter(p => p.sunlightHours < 2).length;
+        results.totalUnits = totalUniqUnits;
+        results.minHours = globalMin === Infinity ? 0 : globalMin;
+        results.maxHours = globalMax;
+        results.avgHours = totalUniqUnits > 0 ? sumMaxForAll / totalUniqUnits : 0;
+        results.belowStandard = belowStd;
 
         return results;
     }
@@ -762,72 +754,16 @@
         clearGroup(heatmapGroup);
         if (!results || !results.points) return;
 
-        const maxHours = CONFIG.SUNLIGHT_ANALYSIS.MAX_HOURS; // 使用配置的8小时
-        const facadeCache = new Map();
-        const getFacade = (buildingIndex) => {
-            if (facadeCache.has(buildingIndex)) return facadeCache.get(buildingIndex);
-            const building = currentData.buildings[buildingIndex];
-            if (!building?.shape) {
-                facadeCache.set(buildingIndex, null);
-                return null;
-            }
-            const facade = findSouthFace(building.shape);
-            const v = facade ? { facade, placementsCache: new Map() } : null;
-            facadeCache.set(buildingIndex, v);
-            return v;
-        };
+        const maxHours = CONFIG.SUNLIGHT_ANALYSIS.MAX_HOURS;
 
         results.points.forEach(point => {
             const building = currentData.buildings[point.buildingIndex];
             if (!building) return;
 
             const floorHeight = building.floorHeight || 3;
-            const units = building.units || 1;
-            const cached = getFacade(point.buildingIndex);
-            if (!cached?.facade) return;
-
-            let placements = cached.placementsCache.get(units);
-            if (!placements) {
-                placements = typeof cached.facade.getUnitPlacements === 'function' ? cached.facade.getUnitPlacements(units) : null;
-                cached.placementsCache.set(units, placements);
-            }
-
-            let wallDataX, wallDataY, outward, tangent, cellWidth;
-            if (placements && placements.length === units) {
-                const p = placements[units - point.unit];
-                wallDataX = p.x;
-                wallDataY = p.y;
-                outward = p.outward;
-                tangent = p.tangent;
-                cellWidth = p.cellWidth;
-            } else if (typeof cached.facade.getPointAtDistance === 'function' && typeof cached.facade.totalLength === 'number' && cached.facade.totalLength > 0) {
-                const d = cached.facade.totalLength * (units - point.unit + 0.5) / units;
-                const hit = cached.facade.getPointAtDistance(d);
-                wallDataX = hit.x;
-                wallDataY = hit.y;
-                outward = hit.outward;
-                tangent = hit.tangent;
-                const unitWidth = cached.facade.totalLength > 0 ? (cached.facade.totalLength / units) : 1;
-                cellWidth = unitWidth * 0.95;
-            } else {
-                const startX = cached.facade.start.x;
-                const startY = cached.facade.start.y;
-                const endX = cached.facade.end.x;
-                const endY = cached.facade.end.y;
-                const dx = endX - startX;
-                const dy = endY - startY;
-                const faceLength = Math.sqrt(dx * dx + dy * dy);
-                const t = (units - point.unit + 0.5) / units;
-                wallDataX = startX + dx * t;
-                wallDataY = startY + dy * t;
-                outward = faceLength > 1e-6 ? { x: -dy / faceLength, y: dx / faceLength } : { x: 0, y: 1 };
-                tangent = faceLength > 1e-6 ? { x: dx / faceLength, y: dy / faceLength } : { x: 1, y: 0 };
-                const unitWidth = faceLength > 0 ? (faceLength / units) : 1;
-                cellWidth = unitWidth * 0.95;
-            }
             const cellHeight = floorHeight * 0.9;
 
-            const geometry = new THREE.PlaneGeometry(cellWidth, cellHeight);
+            const geometry = new THREE.PlaneGeometry(point.cellWidth, cellHeight);
             const color = getSunlightColor(point.sunlightHours, maxHours);
             const material = new THREE.MeshBasicMaterial({
                 color: color,
@@ -844,12 +780,12 @@
 
             const wallHeight = (point.floor - 0.5) * floorHeight;
             const offset = 0.3;
-            const nx = outward?.x || 0;
-            const ny = outward?.y || 0;
+            const nx = point.outward?.x || 0;
+            const ny = point.outward?.y || 0;
 
-            mesh.position.set(wallDataX + nx * offset, wallHeight, wallDataY + ny * offset);
+            mesh.position.set(point.wallDataX + nx * offset, wallHeight, point.wallDataY + ny * offset);
             const up = new THREE.Vector3(0, 1, 0);
-            const xAxis = new THREE.Vector3(tangent?.x || 1, 0, tangent?.y || 0);
+            const xAxis = new THREE.Vector3(point.tangent?.x || 1, 0, point.tangent?.y || 0);
             if (xAxis.lengthSq() < 1e-8) xAxis.set(1, 0, 0);
             xAxis.normalize();
             let zAxis = xAxis.clone().cross(up);
@@ -867,7 +803,8 @@
                 buildingName: point.buildingName,
                 floor: point.floor,
                 unit: point.unit,
-                sunlightHours: point.sunlightHours
+                sunlightHours: point.sunlightHours,
+                unitMaxHours: point.unitMaxHours
             };
 
             heatmapGroup.add(mesh);
@@ -897,7 +834,7 @@
             latInput.value = LATITUDE;
         }
 
-        citySelect.addEventListener('change', function() {
+        citySelect.addEventListener('change', function () {
             const selectedOption = this.options[this.selectedIndex];
             const lat = selectedOption.dataset.lat;
             if (lat) {
@@ -910,7 +847,7 @@
             }
         });
 
-        latInput.addEventListener('change', function() {
+        latInput.addEventListener('change', function () {
             const inputLat = parseFloat(this.value);
             if (!isNaN(inputLat) && inputLat >= -90 && inputLat <= 90) {
                 LATITUDE = inputLat;
@@ -1034,7 +971,7 @@
             const extrudeSettings = {
                 depth: totalHeight,
                 bevelEnabled: false,
-                UVGenerator: makeUVGenerator(minX, maxX, minY, maxY, totalHeight)
+                UVGenerator: makeUVGenerator(b.shape, totalHeight, axisFromAngleDeg(b.unitSplitAngleDeg || 0))
             };
             const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
             geometry.computeVertexNormals();
@@ -1047,7 +984,7 @@
 
             let mesh;
             if (own) {
-                const sideTexture = createFacadeTexture(floors, unitsPerFloor);
+                const sideTexture = createFacadeTexture(floors, unitsPerFloor, b.unitRatiosPerFloor);
                 const sideMaterial = new THREE.MeshStandardMaterial({
                     map: sideTexture,
                     color: CONFIG.MATERIALS.BUILDING_COLOR,
@@ -1156,7 +1093,7 @@
     sunLight.shadow.camera.near = 1;
     sunLight.shadow.camera.far = 2000;
     scene.add(sunLight);
-    
+
     const ambientLight = new THREE.AmbientLight(CONFIG.LIGHTING.AMBIENT_COLOR, CONFIG.LIGHTING.AMBIENT_INTENSITY);
     scene.add(ambientLight);
 
@@ -1219,29 +1156,29 @@
         const z = r * Math.cos(az);
 
         sunLight.position.set(x, y, z);
-        
+
         // 动态调整光照强度
         if (alt > 0) {
             // 太阳高度角（度）
             const altDeg = alt * 180 / Math.PI;
-            
+
             // 根据太阳高度角调整光照
             // 归一化高度角 (0-90度 -> 0-1)
             const altNorm = Math.min(altDeg / 90, 1);
-            
+
             // 使用平方曲线使高角度时的亮度增长更缓慢
             const altCurve = Math.pow(altNorm, 1.5);
-            
+
             // 太阳光强度：使用反向曲线，但限制最大值
-            const sunIntensity = CONFIG.LIGHTING.MIN_SUN_INTENSITY + 
-                (CONFIG.LIGHTING.MAX_SUN_INTENSITY - CONFIG.LIGHTING.MIN_SUN_INTENSITY) * 
+            const sunIntensity = CONFIG.LIGHTING.MIN_SUN_INTENSITY +
+                (CONFIG.LIGHTING.MAX_SUN_INTENSITY - CONFIG.LIGHTING.MIN_SUN_INTENSITY) *
                 (1 - altCurve * 0.6);
-            
+
             // 环境光强度：使用更平缓的曲线
-            const ambientIntensity = CONFIG.LIGHTING.MIN_AMBIENT_INTENSITY + 
-                (CONFIG.LIGHTING.MAX_AMBIENT_INTENSITY - CONFIG.LIGHTING.MIN_AMBIENT_INTENSITY) * 
+            const ambientIntensity = CONFIG.LIGHTING.MIN_AMBIENT_INTENSITY +
+                (CONFIG.LIGHTING.MAX_AMBIENT_INTENSITY - CONFIG.LIGHTING.MIN_AMBIENT_INTENSITY) *
                 (altCurve * 0.8);
-            
+
             sunLight.intensity = sunIntensity;
             ambientLight.intensity = ambientIntensity;
         } else {
@@ -1260,7 +1197,7 @@
 
         // 获取点击位置
         const rect = renderer.domElement.getBoundingClientRect();
-        
+
         // 支持触摸事件和鼠标事件
         let clientX, clientY;
         if (event.touches && event.touches.length > 0) {
@@ -1297,13 +1234,13 @@
         const seasonSelect = document.getElementById('seasonSelect');
         const customDatePicker = document.getElementById('customDatePicker');
         const customDateInput = document.getElementById('customDateInput');
-        
+
         // 设置默认日期为今天
         customDateInput.value = Utils.formatDate(new Date());
-        
+
         seasonSelect.addEventListener('change', (e) => {
             const value = e.target.value;
-            
+
             if (value === 'custom') {
                 // 显示日期选择器
                 customDatePicker.style.display = 'block';
@@ -1314,11 +1251,11 @@
                 customDatePicker.style.display = 'none';
                 customDeclination = null;
             }
-            
+
             updateSun();
             clearSunlightResults();
         });
-        
+
         // 自定义日期变化
         customDateInput.addEventListener('change', (e) => {
             customDeclination = Utils.calculateSolarDeclination(e.target.value);
@@ -1467,10 +1404,10 @@
     // ========== 语言切换功能 ==========
     function initLanguageSwitcher() {
         const langBtns = document.querySelectorAll('.lang-btn');
-        
+
         // 设置初始激活状态
         updateLangButtons();
-        
+
         // 绑定点击事件
         langBtns.forEach(btn => {
             btn.addEventListener('click', () => {
@@ -1482,7 +1419,7 @@
                 }
             });
         });
-        
+
         // 初始化页面语言
         updatePageLanguage();
     }
@@ -1503,7 +1440,7 @@
         document.querySelectorAll('[data-i18n]').forEach(el => {
             const key = el.getAttribute('data-i18n');
             const translation = i18n.t(key);
-            
+
             if (el.tagName === 'INPUT' && (el.type === 'button' || el.type === 'submit')) {
                 el.value = translation;
             } else if (el.tagName === 'OPTION') {
@@ -1512,13 +1449,13 @@
                 el.textContent = translation;
             }
         });
-        
+
         // 更新页面标题
         document.title = i18n.t('viewer.title');
-        
+
         // 更新 HTML lang 属性
         document.documentElement.lang = i18n.getCurrentLanguage() === 'zh' ? 'zh-CN' : 'en';
-        
+
         // 更新侧边栏切换按钮的 title
         const sidebarToggle = document.getElementById('sidebarToggle');
         const controlsPanel = document.getElementById('controls');
@@ -1533,11 +1470,11 @@
     function updateDynamicContent() {
         // 更新纬度显示
         updateLatDisplay();
-        
+
         // 更新时间显示
         const hour = getCurrentHour();
         setTimeText(hour);
-        
+
         // 如果有日照统计结果，更新显示
         if (sunlightResults) {
             showSunlightStats(sunlightResults);
@@ -1569,15 +1506,19 @@
         const color = getSunlightColor(hours, maxHours);
         const colorHex = '#' + color.getHexString();
 
+        const evalHours = data.unitMaxHours !== undefined ? data.unitMaxHours : hours;
         let statusText = i18n.t('viewer.statusGood');
         let statusClass = 'good';
-        if (hours < 2) {
+        if (evalHours < 2) {
             statusText = i18n.t('viewer.statusBad');
             statusClass = 'bad';
-        } else if (hours < 3) {
+        } else if (evalHours < 3) {
             statusText = i18n.t('viewer.statusWarning');
             statusClass = 'warning';
         }
+
+        const isZH = i18n.getCurrentLanguage() === 'zh';
+        const maxText = data.unitMaxHours !== undefined ? (isZH ? `(户最大: ${data.unitMaxHours.toFixed(1)}h)` : `(Max: ${data.unitMaxHours.toFixed(1)}h)`) : '';
 
         content.innerHTML = `
             <div class="info-row">
@@ -1590,7 +1531,7 @@
             </div>
             <div class="info-row">
                 <span class="info-label">${esc(i18n.t('viewer.sunlightDuration'))}</span>
-                <span class="info-value" style="color: ${colorHex}">${hours.toFixed(1)} ${esc(i18n.t('viewer.sunlightHours'))}</span>
+                <span class="info-value" style="color: ${colorHex}">${hours.toFixed(1)} ${esc(i18n.t('viewer.sunlightHours'))} <span style="font-size: 0.85em; color: #888;">${maxText}</span></span>
             </div>
             <div class="info-row">
                 <span class="info-label">${esc(i18n.t('viewer.sunlightStatus'))}</span>
@@ -1627,7 +1568,7 @@
 
         const currentLang = i18n.getCurrentLanguage();
         let seasonName = seasonNames[currentLang][results.declination.toString()];
-        
+
         // 如果是自定义日期，显示具体日期
         if (!seasonName) {
             const customDateInput = document.getElementById('customDateInput');

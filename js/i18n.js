@@ -87,7 +87,7 @@ const i18n = (function() {
                 floorUnit: '层',
                 unitNumber: '户号',
                 unitFrom: '第',
-                unitTo: '户(从东向西)',
+                unitTo: '户(1→N)',
                 sunlightDuration: '日照时长',
                 sunlightHours: '小时',
                 sunlightStatus: '日照状态',
@@ -165,21 +165,41 @@ const i18n = (function() {
                 tableIsOwn: '本小区',
                 tableActions: '操作',
                 tableDelete: '删除',
+                tableSplit: '分割',
                 namePlaceholder: '输入名称（如：1号楼/配建/幼儿园）',
                 
                 // 导出
                 exportButton: '导出 JSON 配置',
+                importJsonButton: '导入 JSON',
+                exportFilenameLabel: '导出文件名',
                 
                 // 提示信息
                 alertNoScale: '请先标定比例尺！',
                 alertMinPoints: '至少需要三个点才能闭合楼栋。',
                 alertInvalidPoly: '绘制的多边形无效，请重画。',
                 alertNoData: '没有数据可导出',
+                alertImportFailed: '导入失败，请检查 JSON 文件格式',
+                alertImportMissingTransform: '导入失败：缺少 scaleRatio 或 origin',
                 alertInvalidDistance: '请输入正确的实际距离，并确保两点不重合。',
                 alertConfirmDelete: '确定删除该楼栋吗？',
                 
                 // 缩放信息
-                zoomInfo: '缩放'
+                zoomInfo: '缩放',
+
+                splitModalTitle: '分户分割（按分割角度 1→N）',
+                splitFloor: '楼层',
+                splitUnits: '户数/层',
+                splitAngle: '分割角度',
+                splitRotateLeft: '左转',
+                splitRotateRight: '右转',
+                splitPreview: '分割示意',
+                splitResetEqual: '等分',
+                splitApplyAllFloors: '应用到所有楼层',
+                splitUnitIndex: '户号(1→N)',
+                splitRatio: '比例(%)',
+                splitArea: '面积(㎡)',
+                splitUseAreas: '按面积输入并实时换算',
+                splitAreasTitle: '面积输入'
             }
         },
 
@@ -254,7 +274,7 @@ const i18n = (function() {
                 floorUnit: 'F',
                 unitNumber: 'Unit Number',
                 unitFrom: 'Unit',
-                unitTo: '(West to East)',
+                unitTo: '(1→N)',
                 sunlightDuration: 'Sunlight Duration',
                 sunlightHours: 'hours',
                 sunlightStatus: 'Sunlight Status',
@@ -332,21 +352,41 @@ const i18n = (function() {
                 tableIsOwn: 'This Community',
                 tableActions: 'Actions',
                 tableDelete: 'Delete',
+                tableSplit: 'Split',
                 namePlaceholder: 'Enter name (e.g., Building 1/Ancillary/Kindergarten)',
                 
                 // Export
                 exportButton: 'Export JSON Configuration',
+                importJsonButton: 'Import JSON',
+                exportFilenameLabel: 'Export Filename',
                 
                 // Alert messages
                 alertNoScale: 'Please calibrate the scale first!',
                 alertMinPoints: 'At least three points are required to close the building.',
                 alertInvalidPoly: 'The drawn polygon is invalid, please redraw.',
                 alertNoData: 'No data to export',
+                alertImportFailed: 'Import failed. Please check the JSON file format.',
+                alertImportMissingTransform: 'Import failed: missing scaleRatio or origin.',
                 alertInvalidDistance: 'Please enter a valid actual distance and ensure the two points are not coincident.',
                 alertConfirmDelete: 'Are you sure you want to delete this building?',
                 
                 // Zoom info
-                zoomInfo: 'Zoom'
+                zoomInfo: 'Zoom',
+
+                splitModalTitle: 'Unit Split (Angle 1→N)',
+                splitFloor: 'Floor',
+                splitUnits: 'Units/Floor',
+                splitAngle: 'Split Angle',
+                splitRotateLeft: 'Rotate Left',
+                splitRotateRight: 'Rotate Right',
+                splitPreview: 'Preview',
+                splitResetEqual: 'Equal Split',
+                splitApplyAllFloors: 'Apply to All Floors',
+                splitUnitIndex: 'Unit (1→N)',
+                splitRatio: 'Ratio (%)',
+                splitArea: 'Area (㎡)',
+                splitUseAreas: 'Use Areas and Update Live',
+                splitAreasTitle: 'Areas'
             }
         }
     };

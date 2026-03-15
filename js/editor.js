@@ -16,6 +16,25 @@
     const fileInput = document.getElementById('fileInput');
     const zoomInfo = document.getElementById('zoom-info');
     const emptyTip = document.getElementById('empty-tip');
+    const jsonImportInput = document.getElementById('jsonImportInput');
+    const btnImportJson = document.getElementById('btnImportJson');
+    const exportFilenameEl = document.getElementById('exportFilename');
+
+    const splitModalOverlay = document.getElementById('splitModalOverlay');
+    const splitModalClose = document.getElementById('splitModalClose');
+    const splitFloorSelect = document.getElementById('splitFloorSelect');
+    const splitUnitsText = document.getElementById('splitUnitsText');
+    const splitBar = document.getElementById('splitBar');
+    const splitTableBody = document.getElementById('splitTableBody');
+    const splitResetEqualBtn = document.getElementById('splitResetEqual');
+    const splitApplyAllFloorsBtn = document.getElementById('splitApplyAllFloors');
+    const splitSaveBtn = document.getElementById('splitSave');
+    const splitAngleInput = document.getElementById('splitAngleInput');
+    const splitAngleSlider = document.getElementById('splitAngleSlider');
+    const splitPreviewCanvas = document.getElementById('splitPreviewCanvas');
+    const splitFloorsInput = document.getElementById('splitFloorsInput');
+    const splitUseAreasChk = document.getElementById('splitUseAreasChk');
+    const splitAreaTh = document.getElementById('splitAreaTh');
 
     // 位置/纬度配置元素
     const citySelectEl = document.getElementById('citySelect');
@@ -45,12 +64,63 @@
     let lastMouseX = 0;
     let lastMouseY = 0;
 
+    let splitState = {
+        open: false,
+        buildingIndex: -1,
+        floorIndex: 0,
+        ratios: [],
+        areas: [],
+        draggingHandle: null,
+        angleDeg: 0,
+        barDom: { segs: [], handles: [] },
+        useAreas: false,
+        draftRatiosPerFloor: [],
+        draftAreasPerFloor: [],
+        preview: null,
+        hoverBoundaryIndex: -1,
+        draggingBoundary: null
+    };
+
     // 使用配置常量
     const CLOSE_EPS_BASE = CONFIG.EDITOR.CLOSE_EPSILON;
     const SANITIZE_EPS = CONFIG.EDITOR.SANITIZE_EPSILON;
 
     // ========== 工具函数（使用 Utils 模块）==========
     const { distance, pointsEqual, clampInt, clampFloat, getPolygonCenter } = Utils;
+
+    function buildEqualRatios(n) {
+        const k = Math.max(1, parseInt(n || 1, 10));
+        const v = 1 / k;
+        return new Array(k).fill(v);
+    }
+
+    function normalizeRatios(ratios) {
+        if (!Array.isArray(ratios) || ratios.length === 0) return [1];
+        const cleaned = ratios.map(v => Math.max(0, Number(v) || 0));
+        const sum = cleaned.reduce((a, b) => a + b, 0);
+        if (sum <= 1e-9) return buildEqualRatios(cleaned.length);
+        return cleaned.map(v => v / sum);
+    }
+
+    function clampHandlePos(pos, left, right) {
+        const p = Number(pos);
+        if (!isFinite(p)) return left;
+        return Math.max(left, Math.min(p, right));
+    }
+
+    function clampAngleDeg(deg) {
+        const d = Number(deg);
+        if (!isFinite(d)) return 0;
+        let v = Math.round(d);
+        while (v > 180) v -= 360;
+        while (v < -180) v += 360;
+        return v;
+    }
+
+    function axisFromAngleDeg(angleDeg) {
+        const rad = clampAngleDeg(angleDeg) * Math.PI / 180;
+        return { x: Math.cos(rad), y: Math.sin(rad) };
+    }
 
     /**
      * 多边形净化 - 移除重复点、过短边、共线点
@@ -664,6 +734,13 @@
 
             // 删除
             const tdOps = document.createElement('td');
+            tdOps.style.whiteSpace = 'nowrap';
+            const btnSplit = document.createElement('button');
+            btnSplit.className = 'btn-mini btn-outline';
+            btnSplit.textContent = i18n.t('editor.tableSplit');
+            btnSplit.addEventListener('click', () => {
+                openSplitModal(i);
+            });
             const btnDel = document.createElement('button');
             btnDel.className = 'btn-mini btn-danger';
             btnDel.textContent = i18n.t('editor.tableDelete');
@@ -674,6 +751,7 @@
                     draw();
                 }
             });
+            tdOps.appendChild(btnSplit);
             tdOps.appendChild(btnDel);
 
             tr.appendChild(tdName);
@@ -700,7 +778,13 @@
     });
 
     // ========== 导出 JSON ==========
-    document.getElementById('btnExport').addEventListener('click', () => {
+    function normalizeExportFilename(name) {
+        const s = String(name ?? '').trim();
+        const base = s || 'buildings_config.json';
+        return base.toLowerCase().endsWith('.json') ? base : (base + '.json');
+    }
+
+    document.getElementById('btnExport').addEventListener('click', async () => {
         if (buildings.length === 0) {
             alert(i18n.t('editor.alertNoData'));
             return;
@@ -739,6 +823,23 @@
                 const cx = (c.x - centerX) * scaleRatio;
                 const cy = (c.y - centerY) * scaleRatio;
 
+                let unitRatiosPerFloor = null;
+                if (Array.isArray(b.unitRatiosPerFloor) && b.unitRatiosPerFloor.length > 0) {
+                    const floors = Math.max(1, parseInt(b.floors || 1, 10));
+                    const per = [];
+                    for (let fi = 0; fi < floors; fi++) {
+                        const units = Math.max(1, parseInt(b.units || 1, 10));
+                        const r = b.unitRatiosPerFloor[fi];
+                        if (Array.isArray(r) && r.length === units) {
+                            const nr = normalizeRatios(r).map(x => Utils.roundTo(x, 6));
+                            per.push(nr);
+                        } else {
+                            per.push(null);
+                        }
+                    }
+                    if (per.some(v => Array.isArray(v))) unitRatiosPerFloor = per;
+                }
+
                 return {
                     name: b.name,
                     floors: b.floors,
@@ -750,12 +851,908 @@
                         x: round2((p.x - centerX) * scaleRatio),
                         y: round2((p.y - centerY) * scaleRatio)
                     })),
-                    center: { x: round2(cx), y: round2(cy) }
+                    center: { x: round2(cx), y: round2(cy) },
+                    unitRatiosPerFloor,
+                    unitSplitAngleDeg: (typeof b.unitSplitAngleDeg === 'number' && isFinite(b.unitSplitAngleDeg)) ? clampAngleDeg(b.unitSplitAngleDeg) : undefined
                 };
             })
         };
 
-        Utils.downloadFile(JSON.stringify(exportData, null, 2), 'buildings_config.json', 'application/json');
+        const filename = normalizeExportFilename(exportFilenameEl?.value);
+        const content = JSON.stringify(exportData, null, 2);
+        try {
+            if (window.showSaveFilePicker) {
+                const handle = await window.showSaveFilePicker({
+                    suggestedName: filename,
+                    types: [
+                        { description: 'JSON', accept: { 'application/json': ['.json'] } }
+                    ]
+                });
+                const writable = await handle.createWritable();
+                await writable.write(content);
+                await writable.close();
+            } else {
+                Utils.downloadFile(content, filename, 'application/json');
+            }
+        } catch (e) {
+            if (e && e.name === 'AbortError') return;
+            Utils.downloadFile(content, filename, 'application/json');
+        }
+    });
+
+    function applyImportedData(data) {
+        const sr = Number(data?.scaleRatio);
+        const origin = data?.origin;
+        const ox = Number(origin?.x);
+        const oy = Number(origin?.y);
+        if (!(sr > 0) || !isFinite(ox) || !isFinite(oy)) {
+            alert(i18n.t('editor.alertImportMissingTransform'));
+            return;
+        }
+
+        const list = Array.isArray(data?.buildings) ? data.buildings : [];
+        const imported = [];
+        for (let i = 0; i < list.length; i++) {
+            const b = list[i];
+            const shape = Array.isArray(b?.shape) ? b.shape : [];
+            if (shape.length < 3) continue;
+            const pts = shape.map(p => ({
+                x: ox + (Number(p?.x) || 0) / sr,
+                y: oy + (Number(p?.y) || 0) / sr
+            }));
+            const cleaned = sanitizePolygon(pts, 0.75);
+            if (cleaned.length < 3) continue;
+
+            const floors = clampInt(parseInt(b?.floors), CONFIG.VALIDATION.FLOORS.MIN, CONFIG.VALIDATION.FLOORS.MAX, CONFIG.DEFAULTS.FLOORS);
+            const floorHeight = clampFloat(parseFloat(b?.floorHeight), CONFIG.VALIDATION.FLOOR_HEIGHT.MIN, CONFIG.VALIDATION.FLOOR_HEIGHT.MAX, CONFIG.DEFAULTS.FLOOR_HEIGHT);
+            const units = clampInt(parseInt(b?.units), CONFIG.VALIDATION.UNITS.MIN, CONFIG.VALIDATION.UNITS.MAX, CONFIG.DEFAULTS.UNITS_PER_FLOOR);
+            const name = (b?.name ?? '').toString().trim() || i18n.t('viewer.defaultBuildingName').replace('{0}', i + 1);
+            const own = (typeof b?.isThisCommunity === 'boolean') ? b.isThisCommunity : true;
+
+            imported.push({
+                id: Date.now().toString(36) + Math.random().toString(36).slice(2),
+                name,
+                floors,
+                floorHeight,
+                units,
+                isThisCommunity: own,
+                points: cleaned,
+                unitRatiosPerFloor: Array.isArray(b?.unitRatiosPerFloor) ? b.unitRatiosPerFloor : null,
+                unitSplitAngleDeg: (typeof b?.unitSplitAngleDeg === 'number' && isFinite(b.unitSplitAngleDeg)) ? clampAngleDeg(b.unitSplitAngleDeg) : undefined
+            });
+        }
+
+        scaleRatio = sr;
+        if (typeof data?.latitude === 'number' && isFinite(data.latitude)) {
+            projectLatEl.value = data.latitude;
+        }
+
+        buildings = imported;
+        updateScaleStatus();
+        toggleDrawMode(true);
+        renderTable();
+        if (isImageLoaded) draw();
+    }
+
+    function importJsonFile(file) {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            try {
+                const data = JSON.parse(ev.target.result);
+                applyImportedData(data);
+            } catch (e) {
+                alert(i18n.t('editor.alertImportFailed'));
+            }
+        };
+        reader.onerror = () => {
+            alert(i18n.t('editor.alertImportFailed'));
+        };
+        reader.readAsText(file);
+    }
+
+    if (btnImportJson && jsonImportInput) {
+        btnImportJson.addEventListener('click', () => {
+            const file = jsonImportInput.files?.[0];
+            if (file) importJsonFile(file);
+            else jsonImportInput.click();
+        });
+        jsonImportInput.addEventListener('change', (e) => {
+            const file = e.target.files?.[0];
+            if (file) importJsonFile(file);
+        });
+    }
+
+    function openSplitModal(buildingIndex) {
+        const b = buildings[buildingIndex];
+        if (!b) return;
+        const floors = Math.max(1, parseInt(b.floors || 1, 10));
+        const units = Math.max(1, parseInt(b.units || 1, 10));
+
+        if (!Array.isArray(b.unitRatiosPerFloor) || b.unitRatiosPerFloor.length !== floors) {
+            b.unitRatiosPerFloor = new Array(floors).fill(null);
+        }
+
+        splitState.draftRatiosPerFloor = new Array(floors).fill(null).map((_, i) => {
+            const r = b.unitRatiosPerFloor?.[i];
+            if (Array.isArray(r) && r.length === units) return normalizeRatios(r);
+            return null;
+        });
+        splitState.draftAreasPerFloor = new Array(floors).fill(null);
+
+        rebuildFloorSelect(floors);
+
+        splitUnitsText.textContent = String(units);
+        if (splitFloorsInput) splitFloorsInput.value = String(floors);
+
+        splitState.open = true;
+        splitState.buildingIndex = buildingIndex;
+        splitState.floorIndex = 0;
+        splitState.areas = new Array(units).fill('');
+        splitFloorSelect.value = '0';
+
+        const r0 = splitState.draftRatiosPerFloor[0];
+        splitState.ratios = (Array.isArray(r0) && r0.length === units) ? normalizeRatios(r0) : buildEqualRatios(units);
+        splitState.angleDeg = (typeof b.unitSplitAngleDeg === 'number' && isFinite(b.unitSplitAngleDeg)) ? clampAngleDeg(b.unitSplitAngleDeg) : 0;
+        splitAngleInput.value = String(splitState.angleDeg);
+        splitAngleSlider.value = String(splitState.angleDeg);
+        splitState.useAreas = false;
+        splitUseAreasChk.checked = false;
+        splitState.preview = null;
+        splitState.hoverBoundaryIndex = -1;
+        splitState.draggingBoundary = null;
+
+        splitModalOverlay.style.display = 'flex';
+        requestAnimationFrame(() => {
+            if (!splitState.open) return;
+            renderSplitUI();
+        });
+    }
+
+    function rebuildFloorSelect(totalFloors) {
+        splitFloorSelect.innerHTML = '';
+        for (let i = 0; i < totalFloors; i++) {
+            const opt = document.createElement('option');
+            opt.value = String(i);
+            opt.textContent = String(i + 1);
+            splitFloorSelect.appendChild(opt);
+        }
+    }
+
+    if (splitFloorsInput) {
+        splitFloorsInput.addEventListener('change', () => {
+            const b = buildings[splitState.buildingIndex];
+            if (!b || !splitState.open) return;
+            storeCurrentSplitDraft();
+
+            const validation = CONFIG.VALIDATION;
+            const nextFloors = clampInt(parseInt(splitFloorsInput.value), validation.FLOORS.MIN, validation.FLOORS.MAX, Math.max(1, b.floors || 1));
+            splitFloorsInput.value = String(nextFloors);
+            if (nextFloors === b.floors) return;
+
+            const units = Math.max(1, parseInt(b.units || 1, 10));
+            b.floors = nextFloors;
+
+            if (Array.isArray(b.unitRatiosPerFloor)) {
+                const old = b.unitRatiosPerFloor.slice();
+                b.unitRatiosPerFloor = new Array(nextFloors).fill(null).map((_, i) => old[i] ?? null);
+            }
+
+            const oldDraftRatios = splitState.draftRatiosPerFloor.slice();
+            const oldDraftAreas = splitState.draftAreasPerFloor.slice();
+            splitState.draftRatiosPerFloor = new Array(nextFloors).fill(null).map((_, i) => oldDraftRatios[i] ?? null);
+            splitState.draftAreasPerFloor = new Array(nextFloors).fill(null).map((_, i) => oldDraftAreas[i] ?? null);
+
+            rebuildFloorSelect(nextFloors);
+            splitState.floorIndex = Math.max(0, Math.min(nextFloors - 1, splitState.floorIndex));
+            splitFloorSelect.value = String(splitState.floorIndex);
+
+            const r = splitState.draftRatiosPerFloor?.[splitState.floorIndex];
+            splitState.ratios = (Array.isArray(r) && r.length === units) ? normalizeRatios(r) : buildEqualRatios(units);
+            const a = splitState.draftAreasPerFloor?.[splitState.floorIndex];
+            splitState.areas = Array.isArray(a) && a.length === units ? a.slice() : new Array(units).fill('');
+
+            renderSplitUI();
+            updateRatiosFromAreas();
+            renderTable();
+        });
+    }
+
+    function closeSplitModal() {
+        splitModalOverlay.style.display = 'none';
+        splitState.open = false;
+        splitState.buildingIndex = -1;
+        splitState.floorIndex = 0;
+        splitState.ratios = [];
+        splitState.areas = [];
+        splitState.draggingHandle = null;
+        splitState.angleDeg = 0;
+        splitState.barDom = { segs: [], handles: [] };
+        splitState.useAreas = false;
+        splitState.draftRatiosPerFloor = [];
+        splitState.draftAreasPerFloor = [];
+    }
+
+    function storeCurrentSplitDraft() {
+        const b = buildings[splitState.buildingIndex];
+        if (!b) return;
+        const floors = Math.max(1, parseInt(b.floors || 1, 10));
+        const units = Math.max(1, parseInt(b.units || 1, 10));
+        const fi = Math.max(0, Math.min(floors - 1, splitState.floorIndex));
+        splitState.draftRatiosPerFloor[fi] = normalizeRatios(splitState.ratios).slice(0, units);
+        if (splitState.useAreas) splitState.draftAreasPerFloor[fi] = splitState.areas.slice(0, units);
+    }
+
+    function currentSplitUnits() {
+        const b = buildings[splitState.buildingIndex];
+        const units = Math.max(1, parseInt(b?.units || 1, 10));
+        return units;
+    }
+
+    function ensureSplitArraySizes(units) {
+        if (!Array.isArray(splitState.ratios)) splitState.ratios = [];
+        if (splitState.ratios.length !== units) {
+            const src = splitState.ratios.map(v => Math.max(0, Number(v) || 0));
+            const next = new Array(units).fill(0);
+            const take = Math.min(units, src.length);
+            let used = 0;
+            for (let i = 0; i < take; i++) {
+                next[i] = src[i];
+                used += next[i];
+            }
+            const remaining = Math.max(0, 1 - used);
+            if (units > take) {
+                const fill = remaining / (units - take);
+                for (let i = take; i < units; i++) next[i] = fill;
+            }
+            splitState.ratios = normalizeRatios(next);
+        }
+
+        if (!Array.isArray(splitState.areas)) splitState.areas = [];
+        if (splitState.areas.length !== units) {
+            const next = new Array(units).fill('');
+            for (let i = 0; i < Math.min(units, splitState.areas.length); i++) next[i] = splitState.areas[i];
+            splitState.areas = next;
+        }
+    }
+
+    function setSplitRatios(ratios) {
+        splitState.ratios = normalizeRatios(ratios);
+        renderSplitUI();
+    }
+
+    function renderSplitBar() {
+        const ratios = splitState.ratios;
+        const n = ratios.length;
+        const dom = splitState.barDom;
+
+        if (dom.segs.length !== n || dom.handles.length !== Math.max(0, n - 1)) {
+            splitBar.innerHTML = '';
+            dom.segs = [];
+            dom.handles = [];
+
+            for (let i = 0; i < n; i++) {
+                const seg = document.createElement('div');
+                seg.className = 'split-seg';
+                seg.dataset.segIndex = String(i);
+                seg.textContent = String(i + 1);
+                splitBar.appendChild(seg);
+                dom.segs.push(seg);
+            }
+
+            for (let i = 0; i < n - 1; i++) {
+                const handle = document.createElement('div');
+                handle.className = 'split-handle';
+                handle.dataset.handleIndex = String(i);
+                handle.addEventListener('pointerdown', (e) => {
+                    if (splitState.useAreas) return;
+                    e.preventDefault();
+                    splitBar.setPointerCapture(e.pointerId);
+                    splitState.draggingHandle = { index: i, pointerId: e.pointerId };
+                });
+                splitBar.appendChild(handle);
+                dom.handles.push(handle);
+            }
+        }
+
+        updateSplitBarStyles();
+    }
+
+    function updateSplitBarStyles() {
+        const ratios = splitState.ratios;
+        const dom = splitState.barDom;
+        const n = ratios.length;
+        let cum = 0;
+        for (let i = 0; i < n; i++) {
+            const seg = dom.segs[i];
+            if (!seg) continue;
+            seg.style.left = (cum * 100).toFixed(4) + '%';
+            seg.style.width = (ratios[i] * 100).toFixed(4) + '%';
+            const pct = Utils.roundTo(ratios[i] * 100, 1);
+            let areaHtml = '';
+            if (splitState.useAreas) {
+                const a = Math.max(0, parseFloat(splitState.areas?.[i]) || 0);
+                if (a > 0) areaHtml = `<div class="seg-area">${Utils.roundTo(a, 2)}㎡</div>`;
+            }
+            seg.innerHTML = `<div class="seg-idx">${i + 1}</div><div class="seg-pct">${pct}%</div>${areaHtml}`;
+            cum += ratios[i];
+        }
+
+        cum = 0;
+        for (let i = 0; i < n - 1; i++) {
+            cum += ratios[i];
+            const handle = dom.handles[i];
+            if (!handle) continue;
+            handle.style.left = (cum * 100).toFixed(4) + '%';
+            handle.classList.toggle('active', splitState.hoverBoundaryIndex === i || (splitState.draggingBoundary?.index === i));
+        }
+    }
+
+    function renderSplitTable() {
+        const units = currentSplitUnits();
+        ensureSplitArraySizes(units);
+        const ratios = splitState.ratios;
+        splitTableBody.innerHTML = '';
+        if (splitAreaTh) splitAreaTh.style.display = splitState.useAreas ? '' : 'none';
+
+        for (let i = 0; i < units; i++) {
+            const tr = document.createElement('tr');
+
+            const tdIdx = document.createElement('td');
+            tdIdx.textContent = String(i + 1);
+
+            const tdRatio = document.createElement('td');
+            const inpRatio = document.createElement('input');
+            inpRatio.type = 'number';
+            inpRatio.min = '0';
+            inpRatio.step = '0.1';
+            inpRatio.value = Utils.roundTo(ratios[i] * 100, 2);
+            inpRatio.disabled = !!splitState.useAreas;
+            inpRatio.addEventListener('change', () => {
+                if (splitState.useAreas) return;
+                const pct = Math.max(0, parseFloat(inpRatio.value) || 0);
+                const target = pct / 100;
+                const next = ratios.slice();
+                next[i] = target;
+                const restIdx = [];
+                for (let k = 0; k < next.length; k++) if (k !== i) restIdx.push(k);
+                const restSum = restIdx.reduce((s, k) => s + Math.max(0, next[k] || 0), 0);
+                const remaining = Math.max(0, 1 - Math.max(0, target));
+                if (restIdx.length > 0) {
+                    if (restSum > 1e-9) {
+                        restIdx.forEach(k => { next[k] = Math.max(0, next[k]) / restSum * remaining; });
+                    } else {
+                        const v = remaining / restIdx.length;
+                        restIdx.forEach(k => { next[k] = v; });
+                    }
+                }
+                setSplitRatios(next);
+            });
+            tdRatio.appendChild(inpRatio);
+
+            let tdArea = null;
+            if (splitState.useAreas) {
+                tdArea = document.createElement('td');
+                const inpArea = document.createElement('input');
+                inpArea.type = 'number';
+                inpArea.min = '0';
+                inpArea.step = '0.01';
+                inpArea.value = splitState.areas[i] ?? '';
+                inpArea.addEventListener('input', () => {
+                    splitState.areas[i] = inpArea.value;
+                    updateRatiosFromAreas();
+                });
+                tdArea.appendChild(inpArea);
+            }
+
+            tr.appendChild(tdIdx);
+            tr.appendChild(tdRatio);
+            if (splitState.useAreas && tdArea) tr.appendChild(tdArea);
+            splitTableBody.appendChild(tr);
+        }
+    }
+
+    function updateRatiosFromAreas() {
+        if (!splitState.useAreas) return;
+        const vals = splitState.areas.map(v => Math.max(0, parseFloat(v) || 0));
+        const sum = vals.reduce((a, b) => a + b, 0);
+        if (!(sum > 1e-9)) return;
+        splitState.ratios = vals.map(v => v / sum);
+        updateSplitBarStyles();
+        renderSplitTable();
+        renderSplitPreview();
+    }
+
+    function renderSplitPreview() {
+        const b = buildings[splitState.buildingIndex];
+        if (!b || !Array.isArray(b.points) || b.points.length < 3) return;
+
+        const canvasEl = splitPreviewCanvas;
+        const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+        const rect = canvasEl.getBoundingClientRect();
+        const cssW = rect.width || 720;
+        const cssH = rect.height || 260;
+        const w = Math.max(10, Math.round(cssW * dpr));
+        const h = Math.max(10, Math.round(cssH * dpr));
+        if (canvasEl.width !== w) canvasEl.width = w;
+        if (canvasEl.height !== h) canvasEl.height = h;
+
+        const g = canvasEl.getContext('2d');
+        g.clearRect(0, 0, w, h);
+
+        const pts = b.points;
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        for (const p of pts) {
+            if (p.x < minX) minX = p.x;
+            if (p.x > maxX) maxX = p.x;
+            if (p.y < minY) minY = p.y;
+            if (p.y > maxY) maxY = p.y;
+        }
+        const pad = 18 * dpr;
+        const spanX = Math.max(1e-6, maxX - minX);
+        const spanY = Math.max(1e-6, maxY - minY);
+        const scale = Math.min((w - pad * 2) / spanX, (h - pad * 2) / spanY);
+        const ox = pad + (w - pad * 2 - spanX * scale) * 0.5;
+        const oy = pad + (h - pad * 2 - spanY * scale) * 0.5;
+
+        const toCanvas = (p) => ({
+            x: ox + (p.x - minX) * scale,
+            y: oy + (p.y - minY) * scale
+        });
+
+        const fromCanvas = (p) => ({
+            x: minX + (p.x - ox) / scale,
+            y: minY + (p.y - oy) / scale
+        });
+
+        g.save();
+        g.fillStyle = 'rgba(0, 123, 255, 0.10)';
+        g.strokeStyle = 'rgba(44, 62, 80, 0.85)';
+        g.lineWidth = 2 * dpr;
+        g.beginPath();
+        const p0 = toCanvas(pts[0]);
+        g.moveTo(p0.x, p0.y);
+        for (let i = 1; i < pts.length; i++) {
+            const pi = toCanvas(pts[i]);
+            g.lineTo(pi.x, pi.y);
+        }
+        g.closePath();
+        g.fill();
+        g.stroke();
+        g.restore();
+
+        const u = axisFromAngleDeg(splitState.angleDeg);
+        const proj = (p) => p.x * u.x + p.y * u.y;
+        let minP = Infinity, maxP = -Infinity;
+        for (const p of pts) {
+            const t = proj(p);
+            if (t < minP) minP = t;
+            if (t > maxP) maxP = t;
+        }
+        const spanP = maxP - minP;
+        if (!(spanP > 1e-6)) return;
+
+        const v = { x: -u.y, y: u.x };
+        const L = Math.max(spanX, spanY) * 2;
+        const center = pts.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+        center.x /= pts.length;
+        center.y /= pts.length;
+        const centerProj = proj(center);
+
+        g.save();
+        g.setLineDash([6 * dpr, 6 * dpr]);
+
+        let cum = 0;
+        const boundaries = [];
+        for (let i = 0; i < splitState.ratios.length - 1; i++) {
+            cum += splitState.ratios[i];
+            const boundaryP = maxP - cum * spanP;
+            const delta = boundaryP - centerProj;
+            const base = { x: center.x + u.x * delta, y: center.y + u.y * delta };
+            const a = { x: base.x + v.x * L, y: base.y + v.y * L };
+            const bpt = { x: base.x - v.x * L, y: base.y - v.y * L };
+            const ca = toCanvas(a);
+            const cb = toCanvas(bpt);
+            boundaries.push({ index: i, proj: boundaryP, a: ca, b: cb });
+
+            const highlight = (splitState.hoverBoundaryIndex === i) || (splitState.draggingBoundary?.index === i);
+            g.strokeStyle = highlight ? 'rgba(231, 76, 60, 0.95)' : 'rgba(231, 76, 60, 0.72)';
+            g.lineWidth = (highlight ? 3 : 2) * dpr;
+            g.beginPath();
+            g.moveTo(ca.x, ca.y);
+            g.lineTo(cb.x, cb.y);
+            g.stroke();
+        }
+        g.restore();
+
+        splitState.preview = { dpr, rect, minX, minY, scale, ox, oy, fromCanvas, toCanvas, u, v, minP, maxP, spanP, boundaries };
+
+        const dotV = (p) => p.x * v.x + p.y * v.y;
+        const eps = 1e-6;
+        function dedupPoints(points) {
+            const out = [];
+            for (const p of points) {
+                let ok = true;
+                for (const q of out) {
+                    if (Math.hypot(p.x - q.x, p.y - q.y) < 1e-3) { ok = false; break; }
+                }
+                if (ok) out.push(p);
+            }
+            return out;
+        }
+
+        function intersectionsAtProj(targetProj) {
+            const hits = [];
+            for (let i = 0; i < pts.length; i++) {
+                const a = pts[i];
+                const b = pts[(i + 1) % pts.length];
+                const ua = proj(a);
+                const ub = proj(b);
+                const da = ua - targetProj;
+                const db = ub - targetProj;
+                if (Math.abs(da) < eps && Math.abs(db) < eps) {
+                    hits.push({ x: a.x, y: a.y });
+                    hits.push({ x: b.x, y: b.y });
+                    continue;
+                }
+                if ((da <= 0 && db >= 0) || (da >= 0 && db <= 0)) {
+                    const denom = ub - ua;
+                    if (Math.abs(denom) < eps) continue;
+                    const t = (targetProj - ua) / denom;
+                    if (t >= -1e-6 && t <= 1 + 1e-6) {
+                        hits.push({
+                            x: a.x + (b.x - a.x) * t,
+                            y: a.y + (b.y - a.y) * t
+                        });
+                    }
+                }
+            }
+            const uniq = dedupPoints(hits);
+            uniq.sort((p, q) => dotV(p) - dotV(q));
+            return uniq;
+        }
+
+        g.save();
+        const fontSize = Math.max(11, Math.round(12 * dpr));
+        const fontUnit = `bold ${fontSize}px Arial`;
+        const fontRest = `${fontSize}px Arial`;
+        g.textAlign = 'left';
+        g.textBaseline = 'middle';
+
+        let startCum = 0;
+        for (let i = 0; i < splitState.ratios.length; i++) {
+            const r = splitState.ratios[i];
+            const segCenterProj = maxP - (startCum + r * 0.5) * spanP;
+            const hits = intersectionsAtProj(segCenterProj);
+            if (hits.length >= 2) {
+                const pA = hits[0];
+                const pB = hits[hits.length - 1];
+                const mid = { x: (pA.x + pB.x) / 2, y: (pA.y + pB.y) / 2 };
+                const m = toCanvas(mid);
+                const pct = Utils.roundTo(r * 100, 1);
+                const unitText = `${i + 1}`;
+                const areaVal = splitState.useAreas ? Math.max(0, parseFloat(splitState.areas?.[i]) || 0) : 0;
+                const restInside = (splitState.useAreas && areaVal > 0) ? `${pct}%, ${Utils.roundTo(areaVal, 2)}㎡` : `${pct}%`;
+                const restText = `(${restInside})`;
+
+                const padPx = 6 * dpr;
+                const gap = 4 * dpr;
+                g.font = fontUnit;
+                const wUnit = g.measureText(unitText).width;
+                g.font = fontRest;
+                const wRest = g.measureText(restText).width;
+                const bw = wUnit + gap + wRest + padPx * 2;
+                const bh = Math.max(20 * dpr, (fontSize + 10) * dpr);
+
+                g.fillStyle = 'rgba(255, 255, 255, 0.85)';
+                g.strokeStyle = 'rgba(44, 62, 80, 0.25)';
+                g.lineWidth = 1 * dpr;
+                g.beginPath();
+                const rx = m.x - bw / 2, ry = m.y - bh / 2;
+                const rr = 6 * dpr;
+                g.moveTo(rx + rr, ry);
+                g.arcTo(rx + bw, ry, rx + bw, ry + bh, rr);
+                g.arcTo(rx + bw, ry + bh, rx, ry + bh, rr);
+                g.arcTo(rx, ry + bh, rx, ry, rr);
+                g.arcTo(rx, ry, rx + bw, ry, rr);
+                g.closePath();
+                g.fill();
+                g.stroke();
+
+                const tx = rx + padPx;
+                const ty = m.y;
+                g.font = fontUnit;
+                g.fillStyle = 'rgba(231, 76, 60, 0.95)';
+                g.fillText(unitText, tx, ty);
+                g.font = fontRest;
+                g.fillStyle = 'rgba(44, 62, 80, 0.90)';
+                g.fillText(restText, tx + wUnit + gap, ty);
+            }
+            startCum += r;
+        }
+        g.restore();
+    }
+
+    function renderSplitUI() {
+        renderSplitBar();
+        renderSplitTable();
+        renderSplitPreview();
+    }
+
+    splitModalClose.addEventListener('click', closeSplitModal);
+    splitModalOverlay.addEventListener('mousedown', (e) => {
+        if (e.target === splitModalOverlay) closeSplitModal();
+    });
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && splitState.open) closeSplitModal();
+    });
+
+    splitBar.addEventListener('pointermove', (e) => {
+        if (!splitState.draggingHandle) return;
+        if (splitState.draggingHandle.pointerId !== e.pointerId) return;
+        const i = splitState.draggingHandle.index;
+        const ratiosNow = splitState.ratios;
+        if (!Array.isArray(ratiosNow) || ratiosNow.length < 2) return;
+        if (i < 0 || i >= ratiosNow.length - 1) return;
+
+        const rect = splitBar.getBoundingClientRect();
+        const x = (e.clientX - rect.left) / Math.max(1, rect.width);
+        const minGap = 0.005;
+        const leftSum = ratiosNow.slice(0, i).reduce((a, b) => a + b, 0);
+        const rightSum = ratiosNow.slice(0, i + 2).reduce((a, b) => a + b, 0);
+        const leftBound = leftSum + minGap;
+        const rightBound = rightSum - minGap;
+        const newBoundary = clampHandlePos(x, leftBound, rightBound);
+        const pairTotal = rightSum - leftSum;
+        const newLeft = newBoundary - leftSum;
+        const newRight = pairTotal - newLeft;
+        const next = ratiosNow.slice();
+        next[i] = Math.max(0, newLeft);
+        next[i + 1] = Math.max(0, newRight);
+        splitState.ratios = normalizeRatios(next);
+        updateSplitBarStyles();
+        renderSplitPreview();
+    });
+
+    splitBar.addEventListener('pointerup', (e) => {
+        if (splitState.draggingHandle && splitState.draggingHandle.pointerId === e.pointerId) {
+            splitState.draggingHandle = null;
+            renderSplitTable();
+            renderSplitPreview();
+        }
+    });
+
+    splitBar.addEventListener('pointercancel', () => {
+        splitState.draggingHandle = null;
+        renderSplitTable();
+        renderSplitPreview();
+    });
+
+    splitAngleSlider.addEventListener('input', () => {
+        const deg = clampAngleDeg(parseInt(splitAngleSlider.value, 10));
+        splitState.angleDeg = deg;
+        splitAngleInput.value = String(deg);
+        renderSplitPreview();
+    });
+
+    splitAngleInput.addEventListener('change', () => {
+        const deg = clampAngleDeg(parseInt(splitAngleInput.value, 10));
+        splitState.angleDeg = deg;
+        splitAngleInput.value = String(deg);
+        splitAngleSlider.value = String(deg);
+        renderSplitPreview();
+    });
+
+    function distPointToSegment(px, py, ax, ay, bx, by) {
+        const abx = bx - ax;
+        const aby = by - ay;
+        const apx = px - ax;
+        const apy = py - ay;
+        const ab2 = abx * abx + aby * aby;
+        if (ab2 <= 1e-9) return Math.hypot(apx, apy);
+        let t = (apx * abx + apy * aby) / ab2;
+        t = Math.max(0, Math.min(1, t));
+        const cx = ax + abx * t;
+        const cy = ay + aby * t;
+        return Math.hypot(px - cx, py - cy);
+    }
+
+    function findHoverBoundaryAtClientPos(clientX, clientY) {
+        const p = splitState.preview;
+        if (!p || !splitPreviewCanvas) return -1;
+        const r = splitPreviewCanvas.getBoundingClientRect();
+        const dpr = p.dpr || 1;
+        const x = (clientX - r.left) * dpr;
+        const y = (clientY - r.top) * dpr;
+        let bestIdx = -1;
+        let best = Infinity;
+        const th = 10 * dpr;
+        for (const b of p.boundaries || []) {
+            const d = distPointToSegment(x, y, b.a.x, b.a.y, b.b.x, b.b.y);
+            if (d < best) {
+                best = d;
+                bestIdx = b.index;
+            }
+        }
+        return best <= th ? bestIdx : -1;
+    }
+
+    function updateRatiosByBoundaryIndex(boundaryIndex, newProj) {
+        const p = splitState.preview;
+        if (!p) return;
+        const ratiosNow = splitState.ratios;
+        const i = boundaryIndex;
+        if (!Array.isArray(ratiosNow) || ratiosNow.length < 2) return;
+        if (i < 0 || i >= ratiosNow.length - 1) return;
+
+        const minGap = 0.005;
+        const leftPrefix = ratiosNow.slice(0, i).reduce((a, b) => a + b, 0);
+        const pairTotal = ratiosNow[i] + ratiosNow[i + 1];
+        const leftBoundCum = leftPrefix + minGap;
+        const rightBoundCum = leftPrefix + pairTotal - minGap;
+
+        const clampProjMax = p.maxP - leftBoundCum * p.spanP;
+        const clampProjMin = p.maxP - rightBoundCum * p.spanP;
+        const clampedProj = clampHandlePos(newProj, clampProjMin, clampProjMax);
+        const newCum = (p.maxP - clampedProj) / p.spanP;
+
+        const newLeft = newCum - leftPrefix;
+        const newRight = pairTotal - newLeft;
+        const next = ratiosNow.slice();
+        next[i] = Math.max(0, newLeft);
+        next[i + 1] = Math.max(0, newRight);
+        splitState.ratios = normalizeRatios(next);
+        updateSplitBarStyles();
+        renderSplitTable();
+        renderSplitPreview();
+    }
+
+    if (splitPreviewCanvas) {
+        splitPreviewCanvas.addEventListener('pointermove', (e) => {
+            if (!splitState.open) return;
+            if (splitState.useAreas) return;
+
+            if (splitState.draggingBoundary && splitState.draggingBoundary.pointerId === e.pointerId) {
+                const p = splitState.preview;
+                if (!p) return;
+                const r = splitPreviewCanvas.getBoundingClientRect();
+                const dpr = p.dpr || 1;
+                const cx = (e.clientX - r.left) * dpr;
+                const cy = (e.clientY - r.top) * dpr;
+                const world = p.fromCanvas({ x: cx, y: cy });
+                const newProj = world.x * p.u.x + world.y * p.u.y;
+                updateRatiosByBoundaryIndex(splitState.draggingBoundary.index, newProj);
+                return;
+            }
+
+            const idx = findHoverBoundaryAtClientPos(e.clientX, e.clientY);
+            if (idx !== splitState.hoverBoundaryIndex) {
+                splitState.hoverBoundaryIndex = idx;
+                splitPreviewCanvas.style.cursor = idx >= 0 ? 'ew-resize' : '';
+                updateSplitBarStyles();
+                renderSplitPreview();
+            }
+        });
+
+        splitPreviewCanvas.addEventListener('pointerleave', () => {
+            if (!splitState.open) return;
+            if (splitState.draggingBoundary) return;
+            if (splitState.hoverBoundaryIndex !== -1) {
+                splitState.hoverBoundaryIndex = -1;
+                splitPreviewCanvas.style.cursor = '';
+                updateSplitBarStyles();
+                renderSplitPreview();
+            }
+        });
+
+        splitPreviewCanvas.addEventListener('pointerdown', (e) => {
+            if (!splitState.open) return;
+            if (splitState.useAreas) return;
+            const idx = findHoverBoundaryAtClientPos(e.clientX, e.clientY);
+            if (idx < 0) return;
+            e.preventDefault();
+            splitPreviewCanvas.setPointerCapture(e.pointerId);
+            splitState.draggingBoundary = { index: idx, pointerId: e.pointerId };
+            splitState.hoverBoundaryIndex = idx;
+            splitPreviewCanvas.style.cursor = 'ew-resize';
+            updateSplitBarStyles();
+            renderSplitPreview();
+        });
+
+        splitPreviewCanvas.addEventListener('pointerup', (e) => {
+            if (!splitState.draggingBoundary) return;
+            if (splitState.draggingBoundary.pointerId !== e.pointerId) return;
+            splitState.draggingBoundary = null;
+            renderSplitTable();
+            renderSplitPreview();
+        });
+
+        splitPreviewCanvas.addEventListener('pointercancel', () => {
+            splitState.draggingBoundary = null;
+            renderSplitTable();
+            renderSplitPreview();
+        });
+
+        if (window.ResizeObserver) {
+            const ro = new ResizeObserver(() => {
+                if (!splitState.open) return;
+                renderSplitPreview();
+            });
+            ro.observe(splitPreviewCanvas);
+        }
+    }
+
+    splitFloorSelect.addEventListener('change', () => {
+        const b = buildings[splitState.buildingIndex];
+        if (!b) return;
+        const units = Math.max(1, parseInt(b.units || 1, 10));
+        storeCurrentSplitDraft();
+        const floorIndex = clampInt(parseInt(splitFloorSelect.value), 0, Math.max(0, b.floors - 1), 0);
+        splitState.floorIndex = floorIndex;
+        const r = splitState.draftRatiosPerFloor?.[floorIndex];
+        splitState.ratios = (Array.isArray(r) && r.length === units) ? normalizeRatios(r) : buildEqualRatios(units);
+        const a = splitState.draftAreasPerFloor?.[floorIndex];
+        splitState.areas = Array.isArray(a) && a.length === units ? a.slice() : new Array(units).fill('');
+        renderSplitUI();
+        updateRatiosFromAreas();
+    });
+
+    splitResetEqualBtn.addEventListener('click', () => {
+        const b = buildings[splitState.buildingIndex];
+        if (!b) return;
+        const units = Math.max(1, parseInt(b.units || 1, 10));
+        splitState.areas = new Array(units).fill('');
+        setSplitRatios(buildEqualRatios(units));
+    });
+
+    splitApplyAllFloorsBtn.addEventListener('click', () => {
+        const b = buildings[splitState.buildingIndex];
+        if (!b) return;
+        const floors = Math.max(1, parseInt(b.floors || 1, 10));
+        const units = Math.max(1, parseInt(b.units || 1, 10));
+        storeCurrentSplitDraft();
+        const r = normalizeRatios(splitState.ratios).slice(0, units);
+        splitState.draftRatiosPerFloor = new Array(floors).fill(null).map(() => r.slice());
+        if (splitState.useAreas) {
+            const a = splitState.areas.slice(0, units);
+            splitState.draftAreasPerFloor = new Array(floors).fill(null).map(() => a.slice());
+        } else {
+            splitState.draftAreasPerFloor = new Array(floors).fill(null);
+        }
+        renderSplitUI();
+        updateRatiosFromAreas();
+    });
+
+    splitUseAreasChk.addEventListener('change', () => {
+        storeCurrentSplitDraft();
+        splitState.useAreas = !!splitUseAreasChk.checked;
+        if (splitState.useAreas) {
+            const b = buildings[splitState.buildingIndex];
+            const units = Math.max(1, parseInt(b?.units || 1, 10));
+            const a = splitState.draftAreasPerFloor?.[splitState.floorIndex];
+            splitState.areas = Array.isArray(a) && a.length === units ? a.slice() : (splitState.areas.length === units ? splitState.areas : new Array(units).fill(''));
+        }
+        renderSplitUI();
+        updateRatiosFromAreas();
+    });
+
+    splitSaveBtn.addEventListener('click', () => {
+        const b = buildings[splitState.buildingIndex];
+        if (!b) return;
+        const floors = Math.max(1, parseInt(b.floors || 1, 10));
+        const units = Math.max(1, parseInt(b.units || 1, 10));
+        if (!Array.isArray(b.unitRatiosPerFloor) || b.unitRatiosPerFloor.length !== floors) {
+            b.unitRatiosPerFloor = new Array(floors).fill(null);
+        }
+        storeCurrentSplitDraft();
+        for (let fi = 0; fi < floors; fi++) {
+            const r = splitState.draftRatiosPerFloor?.[fi];
+            if (Array.isArray(r) && r.length === units) {
+                b.unitRatiosPerFloor[fi] = normalizeRatios(r).slice(0, units);
+            }
+        }
+        b.unitSplitAngleDeg = clampAngleDeg(splitState.angleDeg);
+        closeSplitModal();
     });
 
     // ========== 默认参数输入校验 ==========
@@ -925,6 +1922,8 @@
         
         // 更新绘制模式按钮
         updateDrawModeButton();
+
+        renderTable();
     }
 
     function updateZoomInfo() {
