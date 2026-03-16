@@ -269,20 +269,28 @@ button.success:hover {
     background: rgba(0, 123, 255, 0.08);
 }
 
+.btn-outline.active {
+    background: rgba(0, 123, 255, 0.12);
+    border-color: #80bdff;
+    color: #0056b3;
+}
+
 .modal-overlay {
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.55);
     z-index: 2000;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
     padding: 16px;
+    overflow-y: auto;
 }
 
 .modal {
     width: min(860px, 95vw);
-    max-height: 92vh;
+    max-height: calc(100vh - 32px);
+    height: auto;
     background: #ffffff;
     border-radius: 12px;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
@@ -326,7 +334,10 @@ button.success:hover {
 
 .modal-body {
     padding: 10px 12px;
-    overflow: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -337,6 +348,10 @@ button.success:hover {
     gap: 10px;
     align-items: flex-end;
     flex-wrap: wrap;
+}
+
+.modal-row-top {
+    align-items: flex-start;
 }
 
 .modal-field {
@@ -472,8 +487,17 @@ button.success:hover {
 .split-table-wrap {
     border: 1px solid #e9ecef;
     border-radius: 10px;
-    overflow: hidden;
+    overflow: visible;
     background: #fff;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.split-table-scroll {
+    max-height: 160px;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .split-table-toolbar {

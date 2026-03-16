@@ -35,6 +35,15 @@
     const splitFloorsInput = document.getElementById('splitFloorsInput');
     const splitUseAreasChk = document.getElementById('splitUseAreasChk');
     const splitAreaTh = document.getElementById('splitAreaTh');
+    const splitUnitIndexInput = document.getElementById('splitUnitIndexInput');
+    const splitModeSelect = document.getElementById('splitModeSelect');
+    const splitAdvancedToolbar = document.getElementById('splitAdvancedToolbar');
+    const splitToolLine = document.getElementById('splitToolLine');
+    const splitToolUnit = document.getElementById('splitToolUnit');
+    const splitClearLines = document.getElementById('splitClearLines');
+    const splitBarWrap = document.getElementById('splitBarWrap');
+    const splitTableWrap = document.getElementById('splitTableWrap');
+    const splitBasicActions = document.getElementById('splitBasicActions');
 
     // 位置/纬度配置元素
     const citySelectEl = document.getElementById('citySelect');
@@ -68,6 +77,12 @@
         open: false,
         buildingIndex: -1,
         floorIndex: 0,
+        mode: 'basic',
+        activeTool: 'line',
+        cutLines: [],
+        unitCenters: [],
+        draftLine: [],
+        lineCursor: null,
         ratios: [],
         areas: [],
         draggingHandle: null,
@@ -86,7 +101,7 @@
     const SANITIZE_EPS = CONFIG.EDITOR.SANITIZE_EPSILON;
 
     // ========== 工具函数（使用 Utils 模块）==========
-    const { distance, pointsEqual, clampInt, clampFloat, getPolygonCenter } = Utils;
+    const { distance, pointsEqual, clampInt, clampFloat, getPolygonCenter, deepClone } = Utils;
 
     function buildEqualRatios(n) {
         const k = Math.max(1, parseInt(n || 1, 10));
@@ -853,7 +868,10 @@
                     })),
                     center: { x: round2(cx), y: round2(cy) },
                     unitRatiosPerFloor,
-                    unitSplitAngleDeg: (typeof b.unitSplitAngleDeg === 'number' && isFinite(b.unitSplitAngleDeg)) ? clampAngleDeg(b.unitSplitAngleDeg) : undefined
+                    unitSplitAngleDeg: (typeof b.unitSplitAngleDeg === 'number' && isFinite(b.unitSplitAngleDeg)) ? clampAngleDeg(b.unitSplitAngleDeg) : undefined,
+                    advancedSplit: !!b.advancedSplit,
+                    cutLines: Array.isArray(b.cutLines) ? deepClone(b.cutLines) : [],
+                    unitCenters: Array.isArray(b.unitCenters) ? deepClone(b.unitCenters) : []
                 };
             })
         };
@@ -918,7 +936,10 @@
                 isThisCommunity: own,
                 points: cleaned,
                 unitRatiosPerFloor: Array.isArray(b?.unitRatiosPerFloor) ? b.unitRatiosPerFloor : null,
-                unitSplitAngleDeg: (typeof b?.unitSplitAngleDeg === 'number' && isFinite(b.unitSplitAngleDeg)) ? clampAngleDeg(b.unitSplitAngleDeg) : undefined
+                unitSplitAngleDeg: (typeof b?.unitSplitAngleDeg === 'number' && isFinite(b.unitSplitAngleDeg)) ? clampAngleDeg(b.unitSplitAngleDeg) : undefined,
+                advancedSplit: !!b?.advancedSplit,
+                cutLines: Array.isArray(b?.cutLines) ? deepClone(b.cutLines) : [],
+                unitCenters: Array.isArray(b?.unitCenters) ? deepClone(b.unitCenters) : []
             });
         }
 
@@ -988,6 +1009,12 @@
         splitState.open = true;
         splitState.buildingIndex = buildingIndex;
         splitState.floorIndex = 0;
+        splitState.mode = b.advancedSplit ? 'advanced' : 'basic';
+        splitState.activeTool = 'line';
+        splitState.cutLines = deepClone(Array.isArray(b.cutLines) ? b.cutLines : []);
+        splitState.unitCenters = deepClone(Array.isArray(b.unitCenters) ? b.unitCenters : []);
+        splitState.draftLine = [];
+        splitState.lineCursor = null;
         splitState.areas = new Array(units).fill('');
         splitFloorSelect.value = '0';
 
@@ -1001,6 +1028,13 @@
         splitState.preview = null;
         splitState.hoverBoundaryIndex = -1;
         splitState.draggingBoundary = null;
+        applySplitModeUI();
+
+        if (splitUnitIndexInput) {
+            splitUnitIndexInput.min = '1';
+            splitUnitIndexInput.max = String(units);
+            splitUnitIndexInput.value = String(clampInt(parseInt(splitUnitIndexInput.value), 1, units, 1));
+        }
 
         splitModalOverlay.style.display = 'flex';
         requestAnimationFrame(() => {
@@ -1063,6 +1097,12 @@
         splitState.open = false;
         splitState.buildingIndex = -1;
         splitState.floorIndex = 0;
+        splitState.mode = 'basic';
+        splitState.activeTool = 'line';
+        splitState.cutLines = [];
+        splitState.unitCenters = [];
+        splitState.draftLine = [];
+        splitState.lineCursor = null;
         splitState.ratios = [];
         splitState.areas = [];
         splitState.draggingHandle = null;
@@ -1071,6 +1111,7 @@
         splitState.useAreas = false;
         splitState.draftRatiosPerFloor = [];
         splitState.draftAreasPerFloor = [];
+        applySplitModeUI();
     }
 
     function storeCurrentSplitDraft() {
@@ -1204,6 +1245,8 @@
             const tdRatio = document.createElement('td');
             const inpRatio = document.createElement('input');
             inpRatio.type = 'number';
+            inpRatio.id = `splitRatioInput_${i + 1}`;
+            inpRatio.name = `splitRatioInput_${i + 1}`;
             inpRatio.min = '0';
             inpRatio.step = '0.1';
             inpRatio.value = Utils.roundTo(ratios[i] * 100, 2);
@@ -1235,6 +1278,8 @@
                 tdArea = document.createElement('td');
                 const inpArea = document.createElement('input');
                 inpArea.type = 'number';
+                inpArea.id = `splitAreaInput_${i + 1}`;
+                inpArea.name = `splitAreaInput_${i + 1}`;
                 inpArea.min = '0';
                 inpArea.step = '0.01';
                 inpArea.value = splitState.areas[i] ?? '';
@@ -1305,6 +1350,345 @@
             y: minY + (p.y - oy) / scale
         });
 
+        const unitPalette = [
+            [82, 160, 255],
+            [86, 214, 140],
+            [250, 173, 20],
+            [240, 105, 100],
+            [140, 109, 230],
+            [64, 196, 202],
+            [255, 141, 60],
+            [120, 192, 90]
+        ];
+
+        function unitColor(index) {
+            const i = Math.max(1, parseInt(index || 1, 10));
+            return unitPalette[(i - 1) % unitPalette.length];
+        }
+
+        function buildFloodOverlay(points, preview) {
+            if (!Array.isArray(splitState.unitCenters) || splitState.unitCenters.length === 0) return null;
+            const maxDim = 260;
+            const scaleFactor = Math.min(1, maxDim / Math.max(preview.width, preview.height));
+            const ffW = Math.max(120, Math.round(preview.width * scaleFactor));
+            const ffH = Math.max(120, Math.round(preview.height * scaleFactor));
+            const ffCanvas = document.createElement('canvas');
+            ffCanvas.width = ffW;
+            ffCanvas.height = ffH;
+            const fctx = ffCanvas.getContext('2d');
+            fctx.clearRect(0, 0, ffW, ffH);
+
+            const toFF = (p) => {
+                const c = preview.toCanvas(p);
+                return { x: (c.x / preview.width) * ffW, y: (c.y / preview.height) * ffH };
+            };
+
+            fctx.fillStyle = '#ffffff';
+            fctx.beginPath();
+            const p0ff = toFF(points[0]);
+            fctx.moveTo(p0ff.x, p0ff.y);
+            for (let i = 1; i < points.length; i++) {
+                const pi = toFF(points[i]);
+                fctx.lineTo(pi.x, pi.y);
+            }
+            fctx.closePath();
+            fctx.fill();
+
+            const maskLines = [];
+            if (Array.isArray(splitState.cutLines)) maskLines.push(...splitState.cutLines);
+            if (Array.isArray(splitState.draftLine) && splitState.draftLine.length > 1) {
+                const draft = splitState.draftLine.slice();
+                if (splitState.lineCursor) draft.push(splitState.lineCursor);
+                maskLines.push(draft);
+            }
+            if (maskLines.length > 0) {
+                const lineWidth = Math.max(2, Math.round(3 * ffW / preview.width));
+                fctx.strokeStyle = '#000000';
+                fctx.lineWidth = lineWidth;
+                fctx.lineJoin = 'round';
+                fctx.lineCap = 'round';
+                maskLines.forEach(line => {
+                    if (!Array.isArray(line) || line.length < 2) return;
+                    fctx.beginPath();
+                    const s = toFF(line[0]);
+                    fctx.moveTo(s.x, s.y);
+                    for (let i = 1; i < line.length; i++) {
+                        const pt = toFF(line[i]);
+                        fctx.lineTo(pt.x, pt.y);
+                    }
+                    fctx.stroke();
+                });
+            }
+
+            const img = fctx.getImageData(0, 0, ffW, ffH);
+            const data = img.data;
+            const state = new Uint16Array(ffW * ffH);
+            for (let i = 0, idx = 0; i < data.length; i += 4, idx++) {
+                const a = data[i + 3];
+                if (a < 10) {
+                    state[idx] = 65535;
+                    continue;
+                }
+                if (data[i] < 200 && data[i + 1] < 200 && data[i + 2] < 200) {
+                    state[idx] = 65535;
+                }
+            }
+
+            const overlay = fctx.createImageData(ffW, ffH);
+            const odata = overlay.data;
+            const queue = new Int32Array(ffW * ffH);
+
+            splitState.unitCenters.forEach(center => {
+                const unitIndex = Math.max(1, parseInt(center?.unitIndex || 1, 10));
+                const c = toFF(center);
+                const sx = Math.round(c.x);
+                const sy = Math.round(c.y);
+                if (sx < 0 || sy < 0 || sx >= ffW || sy >= ffH) return;
+                const start = sy * ffW + sx;
+                if (state[start] !== 0) return;
+
+                let head = 0;
+                let tail = 0;
+                queue[tail++] = start;
+                state[start] = unitIndex;
+
+                while (head < tail) {
+                    const idx = queue[head++];
+                    const x = idx % ffW;
+                    const y = (idx / ffW) | 0;
+                    const up = idx - ffW;
+                    const down = idx + ffW;
+                    if (x > 0 && state[idx - 1] === 0) {
+                        state[idx - 1] = unitIndex;
+                        queue[tail++] = idx - 1;
+                    }
+                    if (x < ffW - 1 && state[idx + 1] === 0) {
+                        state[idx + 1] = unitIndex;
+                        queue[tail++] = idx + 1;
+                    }
+                    if (y > 0 && state[up] === 0) {
+                        state[up] = unitIndex;
+                        queue[tail++] = up;
+                    }
+                    if (y < ffH - 1 && state[down] === 0) {
+                        state[down] = unitIndex;
+                        queue[tail++] = down;
+                    }
+                }
+            });
+
+            for (let idx = 0; idx < state.length; idx++) {
+                const unitIndex = state[idx];
+                if (unitIndex === 0 || unitIndex === 65535) continue;
+                const color = unitColor(unitIndex);
+                const i = idx * 4;
+                odata[i] = color[0];
+                odata[i + 1] = color[1];
+                odata[i + 2] = color[2];
+                odata[i + 3] = 120;
+            }
+
+            const octx = ffCanvas.getContext('2d');
+            octx.clearRect(0, 0, ffW, ffH);
+            octx.putImageData(overlay, 0, 0);
+            return ffCanvas;
+        }
+
+        function buildRegionOverlay(points, preview) {
+            const maxDim = 260;
+            const scaleFactor = Math.min(1, maxDim / Math.max(preview.width, preview.height));
+            const ffW = Math.max(120, Math.round(preview.width * scaleFactor));
+            const ffH = Math.max(120, Math.round(preview.height * scaleFactor));
+            const ffCanvas = document.createElement('canvas');
+            ffCanvas.width = ffW;
+            ffCanvas.height = ffH;
+            const fctx = ffCanvas.getContext('2d');
+            fctx.clearRect(0, 0, ffW, ffH);
+
+            const toFF = (p) => {
+                const c = preview.toCanvas(p);
+                return { x: (c.x / preview.width) * ffW, y: (c.y / preview.height) * ffH };
+            };
+
+            fctx.fillStyle = '#ffffff';
+            fctx.beginPath();
+            const p0ff = toFF(points[0]);
+            fctx.moveTo(p0ff.x, p0ff.y);
+            for (let i = 1; i < points.length; i++) {
+                const pi = toFF(points[i]);
+                fctx.lineTo(pi.x, pi.y);
+            }
+            fctx.closePath();
+            fctx.fill();
+
+            const maskLines = [];
+            if (Array.isArray(splitState.cutLines)) maskLines.push(...splitState.cutLines);
+            if (Array.isArray(splitState.draftLine) && splitState.draftLine.length > 1) {
+                const draft = splitState.draftLine.slice();
+                if (splitState.lineCursor) draft.push(splitState.lineCursor);
+                maskLines.push(draft);
+            }
+            if (maskLines.length > 0) {
+                const lineWidth = Math.max(2, Math.round(3 * ffW / preview.width));
+                fctx.strokeStyle = '#000000';
+                fctx.lineWidth = lineWidth;
+                fctx.lineJoin = 'round';
+                fctx.lineCap = 'round';
+                maskLines.forEach(line => {
+                    if (!Array.isArray(line) || line.length < 2) return;
+                    fctx.beginPath();
+                    const s = toFF(line[0]);
+                    fctx.moveTo(s.x, s.y);
+                    for (let i = 1; i < line.length; i++) {
+                        const pt = toFF(line[i]);
+                        fctx.lineTo(pt.x, pt.y);
+                    }
+                    fctx.stroke();
+                });
+            }
+
+            const img = fctx.getImageData(0, 0, ffW, ffH);
+            const data = img.data;
+            const state = new Uint16Array(ffW * ffH);
+            for (let i = 0, idx = 0; i < data.length; i += 4, idx++) {
+                const a = data[i + 3];
+                if (a < 10) {
+                    state[idx] = 65535;
+                    continue;
+                }
+                if (data[i] < 200 && data[i + 1] < 200 && data[i + 2] < 200) {
+                    state[idx] = 65535;
+                }
+            }
+
+            const overlay = fctx.createImageData(ffW, ffH);
+            const odata = overlay.data;
+            const queue = new Int32Array(ffW * ffH);
+            let region = 0;
+
+            for (let idx = 0; idx < state.length; idx++) {
+                if (state[idx] !== 0) continue;
+                region++;
+                const color = unitColor(region);
+                let head = 0;
+                let tail = 0;
+                queue[tail++] = idx;
+                state[idx] = region;
+
+                while (head < tail) {
+                    const cur = queue[head++];
+                    const x = cur % ffW;
+                    const y = (cur / ffW) | 0;
+                    const oi = cur * 4;
+                    odata[oi] = color[0];
+                    odata[oi + 1] = color[1];
+                    odata[oi + 2] = color[2];
+                    odata[oi + 3] = 120;
+
+                    if (x > 0 && state[cur - 1] === 0) {
+                        state[cur - 1] = region;
+                        queue[tail++] = cur - 1;
+                    }
+                    if (x < ffW - 1 && state[cur + 1] === 0) {
+                        state[cur + 1] = region;
+                        queue[tail++] = cur + 1;
+                    }
+                    if (y > 0 && state[cur - ffW] === 0) {
+                        state[cur - ffW] = region;
+                        queue[tail++] = cur - ffW;
+                    }
+                    if (y < ffH - 1 && state[cur + ffW] === 0) {
+                        state[cur + ffW] = region;
+                        queue[tail++] = cur + ffW;
+                    }
+                }
+            }
+
+            if (region === 0) return null;
+            const octx = ffCanvas.getContext('2d');
+            octx.clearRect(0, 0, ffW, ffH);
+            octx.putImageData(overlay, 0, 0);
+            return ffCanvas;
+        }
+
+        function renderAdvancedPreview(ctx, points, preview) {
+            const regionOverlay = buildRegionOverlay(points, preview);
+            if (regionOverlay) {
+                ctx.save();
+                ctx.drawImage(regionOverlay, 0, 0, preview.width, preview.height);
+                ctx.restore();
+            }
+
+            const overlay = buildFloodOverlay(points, preview);
+            if (overlay) {
+                ctx.save();
+                ctx.drawImage(overlay, 0, 0, preview.width, preview.height);
+                ctx.restore();
+            }
+
+            const lineWidth = 2 * preview.dpr;
+            const drawLine = (line, dashed) => {
+                if (!Array.isArray(line) || line.length < 2) return;
+                ctx.save();
+                ctx.strokeStyle = 'rgba(231, 76, 60, 0.9)';
+                ctx.lineWidth = lineWidth;
+                ctx.lineJoin = 'round';
+                ctx.lineCap = 'round';
+                if (dashed) ctx.setLineDash([6 * preview.dpr, 6 * preview.dpr]);
+                ctx.beginPath();
+                const s = preview.toCanvas(line[0]);
+                ctx.moveTo(s.x, s.y);
+                for (let i = 1; i < line.length; i++) {
+                    const pt = preview.toCanvas(line[i]);
+                    ctx.lineTo(pt.x, pt.y);
+                }
+                ctx.stroke();
+                ctx.restore();
+            };
+
+            if (Array.isArray(splitState.cutLines)) {
+                splitState.cutLines.forEach(line => drawLine(line, false));
+            }
+
+            if (Array.isArray(splitState.draftLine) && splitState.draftLine.length > 0) {
+                const draft = splitState.draftLine.slice();
+                if (splitState.lineCursor) draft.push(splitState.lineCursor);
+                drawLine(draft, true);
+
+                ctx.save();
+                ctx.fillStyle = 'rgba(231, 76, 60, 0.9)';
+                draft.forEach(pt => {
+                    const c = preview.toCanvas(pt);
+                    ctx.beginPath();
+                    ctx.arc(c.x, c.y, 3 * preview.dpr, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+                ctx.restore();
+            }
+
+            if (Array.isArray(splitState.unitCenters)) {
+                ctx.save();
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.font = `bold ${Math.max(11, Math.round(11 * preview.dpr))}px Arial`;
+                splitState.unitCenters.forEach(center => {
+                    const c = preview.toCanvas(center);
+                    const color = unitColor(center?.unitIndex || 1);
+                    ctx.fillStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, 0.95)`;
+                    ctx.strokeStyle = 'rgba(44, 62, 80, 0.7)';
+                    ctx.lineWidth = 1 * preview.dpr;
+                    ctx.beginPath();
+                    ctx.arc(c.x, c.y, 7 * preview.dpr, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillText(String(center?.unitIndex || 1), c.x, c.y);
+                });
+                ctx.restore();
+            }
+        }
+
         g.save();
         g.fillStyle = 'rgba(0, 123, 255, 0.10)';
         g.strokeStyle = 'rgba(44, 62, 80, 0.85)';
@@ -1320,6 +1704,12 @@
         g.fill();
         g.stroke();
         g.restore();
+
+        if (splitState.mode === 'advanced') {
+            splitState.preview = { dpr, rect, minX, minY, scale, ox, oy, fromCanvas, toCanvas, width: w, height: h };
+            renderAdvancedPreview(g, pts, splitState.preview);
+            return;
+        }
 
         const u = axisFromAngleDeg(splitState.angleDeg);
         const proj = (p) => p.x * u.x + p.y * u.y;
@@ -1479,6 +1869,82 @@
         renderSplitPreview();
     }
 
+    function applySplitModeUI() {
+        const isAdvanced = splitState.mode === 'advanced';
+        if (splitModeSelect) splitModeSelect.value = isAdvanced ? 'advanced' : 'basic';
+        const setDisplay = (el, show, display) => {
+            if (!el) return;
+            el.style.display = show ? display : 'none';
+        };
+        setDisplay(splitAdvancedToolbar, isAdvanced, 'flex');
+        setDisplay(splitBarWrap, !isAdvanced, 'block');
+        setDisplay(splitBasicActions, !isAdvanced, 'flex');
+        setDisplay(splitTableWrap, !isAdvanced, 'block');
+        updateSplitToolUI();
+        if (splitState.open) {
+            renderSplitPreview();
+            if (!isAdvanced) {
+                renderSplitBar();
+                renderSplitTable();
+            }
+        }
+    }
+
+    function updateSplitToolUI() {
+        if (!splitToolLine || !splitToolUnit) return;
+        const isLine = splitState.activeTool === 'line';
+        splitToolLine.classList.toggle('active', isLine);
+        splitToolUnit.classList.toggle('active', !isLine);
+        splitToolLine.setAttribute('aria-pressed', isLine ? 'true' : 'false');
+        splitToolUnit.setAttribute('aria-pressed', !isLine ? 'true' : 'false');
+    }
+
+    function setSplitTool(tool) {
+        splitState.activeTool = tool === 'unit' ? 'unit' : 'line';
+        if (splitState.activeTool !== 'line') {
+            splitState.lineCursor = null;
+        }
+        updateSplitToolUI();
+    }
+
+    if (splitModeSelect) {
+        splitModeSelect.addEventListener('change', () => {
+            const nextMode = splitModeSelect.value === 'advanced' ? 'advanced' : 'basic';
+            splitState.mode = nextMode;
+            applySplitModeUI();
+        });
+    }
+
+    if (splitToolLine) {
+        splitToolLine.addEventListener('click', () => {
+            setSplitTool('line');
+        });
+    }
+
+    if (splitToolUnit) {
+        splitToolUnit.addEventListener('click', () => {
+            setSplitTool('unit');
+        });
+    }
+
+    if (splitClearLines) {
+        splitClearLines.addEventListener('click', () => {
+            splitState.cutLines = [];
+            splitState.unitCenters = [];
+            splitState.draftLine = [];
+            splitState.lineCursor = null;
+            renderSplitPreview();
+        });
+    }
+
+    if (splitUnitIndexInput) {
+        splitUnitIndexInput.addEventListener('change', () => {
+            const b = buildings[splitState.buildingIndex];
+            const units = Math.max(1, parseInt(b?.units || 1, 10));
+            splitUnitIndexInput.value = String(clampInt(parseInt(splitUnitIndexInput.value), 1, units, 1));
+        });
+    }
+
     splitModalClose.addEventListener('click', closeSplitModal);
     splitModalOverlay.addEventListener('mousedown', (e) => {
         if (e.target === splitModalOverlay) closeSplitModal();
@@ -1488,6 +1954,7 @@
     });
 
     splitBar.addEventListener('pointermove', (e) => {
+        if (splitState.mode === 'advanced') return;
         if (!splitState.draggingHandle) return;
         if (splitState.draggingHandle.pointerId !== e.pointerId) return;
         const i = splitState.draggingHandle.index;
@@ -1515,6 +1982,7 @@
     });
 
     splitBar.addEventListener('pointerup', (e) => {
+        if (splitState.mode === 'advanced') return;
         if (splitState.draggingHandle && splitState.draggingHandle.pointerId === e.pointerId) {
             splitState.draggingHandle = null;
             renderSplitTable();
@@ -1523,6 +1991,7 @@
     });
 
     splitBar.addEventListener('pointercancel', () => {
+        if (splitState.mode === 'advanced') return;
         splitState.draggingHandle = null;
         renderSplitTable();
         renderSplitPreview();
@@ -1577,6 +2046,40 @@
         return best <= th ? bestIdx : -1;
     }
 
+    function getPreviewWorldFromEvent(clientX, clientY) {
+        const p = splitState.preview;
+        if (!p || !splitPreviewCanvas) return null;
+        const r = splitPreviewCanvas.getBoundingClientRect();
+        const dpr = p.dpr || 1;
+        const cx = (clientX - r.left) * dpr;
+        const cy = (clientY - r.top) * dpr;
+        return p.fromCanvas({ x: cx, y: cy });
+    }
+
+    function commitDraftLine() {
+        if (Array.isArray(splitState.draftLine) && splitState.draftLine.length >= 2) {
+            splitState.cutLines.push(splitState.draftLine.slice());
+        }
+        splitState.draftLine = [];
+        splitState.lineCursor = null;
+        renderSplitPreview();
+    }
+
+    function assignUnitCenter(world) {
+        if (!world) return;
+        const b = buildings[splitState.buildingIndex];
+        const units = Math.max(1, parseInt(b?.units || 1, 10));
+        const unitIndex = clampInt(parseInt(splitUnitIndexInput?.value || '1', 10), 1, units, 1);
+        if (splitUnitIndexInput) splitUnitIndexInput.value = String(unitIndex);
+        splitState.unitCenters = splitState.unitCenters.filter(c => c?.unitIndex !== unitIndex);
+        splitState.unitCenters.push({ x: world.x, y: world.y, unitIndex });
+        if (splitUnitIndexInput) {
+            const nextIndex = Math.min(unitIndex + 1, units);
+            splitUnitIndexInput.value = String(nextIndex);
+        }
+        renderSplitPreview();
+    }
+
     function updateRatiosByBoundaryIndex(boundaryIndex, newProj) {
         const p = splitState.preview;
         if (!p) return;
@@ -1610,6 +2113,14 @@
     if (splitPreviewCanvas) {
         splitPreviewCanvas.addEventListener('pointermove', (e) => {
             if (!splitState.open) return;
+            if (splitState.mode === 'advanced') {
+                if (splitState.activeTool === 'line' && Array.isArray(splitState.draftLine) && splitState.draftLine.length > 0) {
+                    const world = getPreviewWorldFromEvent(e.clientX, e.clientY);
+                    splitState.lineCursor = world;
+                    renderSplitPreview();
+                }
+                return;
+            }
             if (splitState.useAreas) return;
 
             if (splitState.draggingBoundary && splitState.draggingBoundary.pointerId === e.pointerId) {
@@ -1636,6 +2147,13 @@
 
         splitPreviewCanvas.addEventListener('pointerleave', () => {
             if (!splitState.open) return;
+            if (splitState.mode === 'advanced') {
+                if (splitState.lineCursor) {
+                    splitState.lineCursor = null;
+                    renderSplitPreview();
+                }
+                return;
+            }
             if (splitState.draggingBoundary) return;
             if (splitState.hoverBoundaryIndex !== -1) {
                 splitState.hoverBoundaryIndex = -1;
@@ -1647,6 +2165,19 @@
 
         splitPreviewCanvas.addEventListener('pointerdown', (e) => {
             if (!splitState.open) return;
+            if (splitState.mode === 'advanced') {
+                if (e.button === 2) return;
+                const world = getPreviewWorldFromEvent(e.clientX, e.clientY);
+                if (!world) return;
+                if (splitState.activeTool === 'unit') {
+                    assignUnitCenter(world);
+                    return;
+                }
+                splitState.draftLine = Array.isArray(splitState.draftLine) ? splitState.draftLine : [];
+                splitState.draftLine.push(world);
+                renderSplitPreview();
+                return;
+            }
             if (splitState.useAreas) return;
             const idx = findHoverBoundaryAtClientPos(e.clientX, e.clientY);
             if (idx < 0) return;
@@ -1660,6 +2191,7 @@
         });
 
         splitPreviewCanvas.addEventListener('pointerup', (e) => {
+            if (splitState.mode === 'advanced') return;
             if (!splitState.draggingBoundary) return;
             if (splitState.draggingBoundary.pointerId !== e.pointerId) return;
             splitState.draggingBoundary = null;
@@ -1668,9 +2200,53 @@
         });
 
         splitPreviewCanvas.addEventListener('pointercancel', () => {
+            if (splitState.mode === 'advanced') return;
             splitState.draggingBoundary = null;
             renderSplitTable();
             renderSplitPreview();
+        });
+
+        splitPreviewCanvas.addEventListener('dblclick', (e) => {
+            if (!splitState.open || splitState.mode !== 'advanced') return;
+            e.preventDefault();
+            commitDraftLine();
+        });
+
+        splitPreviewCanvas.addEventListener('contextmenu', (e) => {
+            if (!splitState.open || splitState.mode !== 'advanced') return;
+            e.preventDefault();
+            const repaintAfterUndo = () => {
+                renderSplitPreview();
+                requestAnimationFrame(renderSplitPreview);
+            };
+            const cursorWorld = getPreviewWorldFromEvent(e.clientX, e.clientY);
+            if (Array.isArray(splitState.draftLine) && splitState.draftLine.length > 0) {
+                splitState.draftLine.pop();
+                if (splitState.draftLine.length === 0) {
+                    splitState.lineCursor = null;
+                } else if (cursorWorld) {
+                    splitState.lineCursor = cursorWorld;
+                }
+                repaintAfterUndo();
+                return;
+            }
+            if (Array.isArray(splitState.cutLines) && splitState.cutLines.length > 0) {
+                const last = splitState.cutLines[splitState.cutLines.length - 1];
+                if (Array.isArray(last) && last.length > 0) {
+                    while (last.length > 1 && pointsEqual(last[last.length - 1], last[last.length - 2], 1e-4)) {
+                        last.pop();
+                    }
+                    const moved = last.pop();
+                    splitState.draftLine = last.slice();
+                    splitState.cutLines.pop();
+                    if (cursorWorld) {
+                        splitState.lineCursor = cursorWorld;
+                    } else {
+                        splitState.lineCursor = moved ? { x: moved.x, y: moved.y } : null;
+                    }
+                    repaintAfterUndo();
+                }
+            }
         });
 
         if (window.ResizeObserver) {
@@ -1752,6 +2328,14 @@
             }
         }
         b.unitSplitAngleDeg = clampAngleDeg(splitState.angleDeg);
+        if (splitState.mode === 'advanced') {
+            commitDraftLine();
+            b.advancedSplit = true;
+            b.cutLines = deepClone(splitState.cutLines);
+            b.unitCenters = deepClone(splitState.unitCenters);
+        } else {
+            b.advancedSplit = false;
+        }
         closeSplitModal();
     });
 

@@ -166,7 +166,7 @@
                 <button id="splitModalClose" class="modal-close" type="button" aria-label="close">×</button>
             </div>
             <div class="modal-body">
-                <div class="modal-row">
+                <div class="modal-row modal-row-top">
                     <div class="modal-field">
                         <div class="modal-label" data-i18n="editor.splitFloor">楼层</div>
                         <select id="splitFloorSelect"></select>
@@ -179,6 +179,31 @@
                         <div class="modal-label" data-i18n="editor.splitUnits">户数/层</div>
                         <div id="splitUnitsText" class="modal-text"></div>
                     </div>
+                    <div class="modal-field">
+                        <div class="modal-label" data-i18n="editor.splitMode">分割模式</div>
+                        <select id="splitModeSelect">
+                            <option value="basic" data-i18n="editor.splitModeBasic">单轴等比</option>
+                            <option value="advanced" data-i18n="editor.splitModeAdvanced">自由划线</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="splitAdvancedToolbar" class="modal-row" style="display:none;">
+                    <div class="modal-field">
+                        <div class="modal-label" data-i18n="editor.splitTools">高级工具</div>
+                        <div class="inline-row" style="margin:0;">
+                            <button id="splitToolLine" class="btn-outline" type="button"
+                                data-i18n="editor.splitToolLine">画线切割</button>
+                            <button id="splitToolUnit" class="btn-outline" type="button"
+                                data-i18n="editor.splitToolUnit">指定户属</button>
+                            <button id="splitClearLines" class="secondary" type="button"
+                                data-i18n="editor.splitToolClear">清空线段</button>
+                        </div>
+                    </div>
+                    <div class="modal-field" style="max-width:140px;">
+                        <div class="modal-label" data-i18n="editor.splitUnitIndex">户号(1→N)</div>
+                        <input id="splitUnitIndexInput" type="number" min="1" step="1" value="1">
+                    </div>
                 </div>
 
                 <div class="split-preview-wrap">
@@ -186,11 +211,11 @@
                     <canvas id="splitPreviewCanvas" class="split-preview-canvas" width="720" height="260"></canvas>
                 </div>
 
-                <div class="split-bar-wrap">
+                <div class="split-bar-wrap" id="splitBarWrap">
                     <div id="splitBar" class="split-bar" aria-label="split bar"></div>
                 </div>
 
-                <div class="modal-row modal-actions">
+                <div class="modal-row modal-actions" id="splitBasicActions">
                     <button id="splitResetEqual" class="secondary" type="button"
                         data-i18n="editor.splitResetEqual">等分</button>
                     <button id="splitApplyAllFloors" class="btn-outline" type="button"
@@ -204,23 +229,25 @@
                     </div>
                 </div>
 
-                <div class="split-table-wrap">
+                <div class="split-table-wrap" id="splitTableWrap">
                     <div class="split-table-toolbar">
                         <label class="inline-row" style="margin:0; font-weight:normal;">
                             <input type="checkbox" id="splitUseAreasChk">
                             <span data-i18n="editor.splitUseAreas">按面积输入并实时换算</span>
                         </label>
                     </div>
-                    <table class="split-table">
-                        <thead>
-                            <tr id="splitTableHeadRow">
-                                <th data-i18n="editor.splitUnitIndex">户号(1→N)</th>
-                                <th data-i18n="editor.splitRatio">比例(%)</th>
-                                <th id="splitAreaTh" data-i18n="editor.splitArea">面积(㎡)</th>
-                            </tr>
-                        </thead>
-                        <tbody id="splitTableBody"></tbody>
-                    </table>
+                    <div class="split-table-scroll">
+                        <table class="split-table">
+                            <thead>
+                                <tr id="splitTableHeadRow">
+                                    <th data-i18n="editor.splitUnitIndex">户号(1→N)</th>
+                                    <th data-i18n="editor.splitRatio">比例(%)</th>
+                                    <th id="splitAreaTh" data-i18n="editor.splitArea">面积(㎡)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="splitTableBody"></tbody>
+                        </table>
+                    </div>
                 </div>
 
                 <div class="modal-row modal-actions">
