@@ -408,6 +408,79 @@
         }
     }
 
+    function normalizeUnitRatios(ratios, units) {
+        if (!Array.isArray(ratios) || ratios.length !== units) return null;
+
+        const cleaned = ratios.map(v => Math.max(0, Number(v) || 0));
+        const sum = cleaned.reduce((acc, v) => acc + v, 0);
+        if (sum <= 1e-9) return null;
+
+        return cleaned.map(v => v / sum);
+    }
+
+    function getSharedFirstFloorUnitRatios(unitRatiosPerFloor, floors, units) {
+        if (!Array.isArray(unitRatiosPerFloor) || unitRatiosPerFloor.length === 0) return null;
+
+        const first = normalizeUnitRatios(unitRatiosPerFloor[0], units);
+        if (!first) return null;
+
+        for (let i = 1; i < floors; i++) {
+            const next = unitRatiosPerFloor[i];
+            if (next == null) continue;
+
+            const normalized = normalizeUnitRatios(next, units);
+            if (!normalized) return null;
+
+            for (let j = 0; j < units; j++) {
+                if (Math.abs(normalized[j] - first[j]) > 1e-6) {
+                    return null;
+                }
+            }
+        }
+
+        return first;
+    }
+
+    function getUnitRatiosForFloor(unitRatiosPerFloor, floorIndex, floors, units) {
+        const direct = normalizeUnitRatios(unitRatiosPerFloor?.[floorIndex], units);
+        if (direct) return direct;
+
+        if (floorIndex > 0) {
+            const sharedFirst = getSharedFirstFloorUnitRatios(unitRatiosPerFloor, floors, units);
+            if (sharedFirst) return sharedFirst.slice();
+        }
+
+        return null;
+    }
+
+    function normalizeUnitNumberingStartSide(value) {
+        return value === 'B' ? 'B' : 'A';
+    }
+
+    function isUnitNumberingStartFromSideB(building) {
+        return normalizeUnitNumberingStartSide(building?.unitNumberingStartSide) === 'B';
+    }
+
+    function getDisplayUnitNumber(building, physicalUnitIndex, units) {
+        return isUnitNumberingStartFromSideB(building)
+            ? (units - physicalUnitIndex)
+            : (physicalUnitIndex + 1);
+    }
+
+    function dot2(point, axis) {
+        return (point?.x || 0) * (axis?.x || 0) + (point?.y || 0) * (axis?.y || 0);
+    }
+
+    function axisFromAngleDeg(angleDeg) {
+        const rad = (Number(angleDeg) || 0) * Math.PI / 180;
+        return { x: Math.cos(rad), y: Math.sin(rad) };
+    }
+
+    function getHeatmapCellWidth(subLen) {
+        const sideInset = 0.12;
+        return Math.max(0.06, subLen - sideInset * 2);
+    }
+
     // ========== 日照分析核心功能 ==========
 
     /**
@@ -440,49 +513,132 @@
         return { start, end };
     }
 
+    function getBuildingSplitAxis(building) {
+        return axisFromAngleDeg(building?.unitSplitAngleDeg || 0);
+    }
+
     /**
-     * 计算每户的采光检测点 - 户号改为从东向西
+     * 计算所有外墙片段上的采光检测点
      */
     function calculateSamplingPoints(building, buildingIndex) {
         const points = [];
         const floors = Math.max(1, parseInt(building.floors || 1, 10));
         const floorHeight = building.floorHeight || 3;
         const units = Math.max(1, parseInt(building.units || 1, 10));
+        const axis = getBuildingSplitAxis(building);
 
-        const southFace = findSouthFace(building.shape);
-        if (!southFace) return points;
+        if (!Array.isArray(building.shape) || building.shape.length < 3) return points;
 
-        const sDx = southFace.end.x - southFace.start.x;
-        const sDy = southFace.end.y - southFace.start.y;
-        const len = Math.sqrt(sDx * sDx + sDy * sDy);
-        
-        // 法向量计算
-        const nx = sDy / len;
-        const ny = -sDx / len;
+        let signedArea = 0;
+        for (let i = 0; i < building.shape.length; i++) {
+            const p1 = building.shape[i];
+            const p2 = building.shape[(i + 1) % building.shape.length];
+            signedArea += p1.x * p2.y - p2.x * p1.y;
+        }
+
+        const isCCW = signedArea > 0;
+        const segments = [];
+        let minProj = Infinity;
+        let maxProj = -Infinity;
+
+        for (let i = 0; i < building.shape.length; i++) {
+            const start = building.shape[i];
+            const end = building.shape[(i + 1) % building.shape.length];
+            const dx = end.x - start.x;
+            const dy = end.y - start.y;
+            const len = Math.hypot(dx, dy);
+            if (len <= 1e-6) continue;
+
+            const leftNormal = { x: -dy / len, y: dx / len };
+            const rightNormal = { x: dy / len, y: -dx / len };
+            const outward = isCCW ? rightNormal : leftNormal;
+            const pA = dot2(start, axis);
+            const pB = dot2(end, axis);
+
+            minProj = Math.min(minProj, pA, pB);
+            maxProj = Math.max(maxProj, pA, pB);
+            segments.push({ start, end, len, outward, pA, pB });
+        }
+
+        const spanProj = maxProj - minProj;
+        if (!isFinite(spanProj) || segments.length === 0) return points;
 
         for (let floor = 0; floor < floors; floor++) {
             const windowHeight = floor * floorHeight + floorHeight * 0.4 + 1.2;
+            const ratios = getUnitRatiosForFloor(building.unitRatiosPerFloor, floor, floors, units);
+            const boundaries = [maxProj + 1e-4];
 
+            let cumulative = 0;
             for (let unit = 0; unit < units; unit++) {
-                // t 的计算改为 (units - 1 - unit + 0.5) / units
-                // unit=0 对应 end(东)
-                const t = (units - 1 - unit + 0.5) / units; 
-                
-                const x = southFace.start.x + sDx * t;
-                const y = southFace.start.y + sDy * t;
+                const ratio = ratios ? ratios[unit] : (1 / units);
+                cumulative += ratio;
+                boundaries.push(maxProj - cumulative * spanProj);
+            }
+            boundaries[units] -= 1e-4;
 
-                points.push({
-                    buildingIndex,
-                    buildingName: building.name || `建筑${buildingIndex + 1}`,
-                    floor: floor + 1,
-                    unit: unit + 1, // 此时 unit 1 对应最东侧
-                    x: x + nx * 0.5,
-                    y: y + Math.abs(ny) * 0.5,
-                    z: windowHeight,
-                    sunlightHours: 0
-                });
+            for (const segment of segments) {
+                const ts = [0, 1];
+
+                if (spanProj > 1e-6 && Math.abs(segment.pB - segment.pA) > 1e-6) {
+                    for (const boundary of boundaries) {
+                        const t = (boundary - segment.pA) / (segment.pB - segment.pA);
+                        if (t > 0 && t < 1) ts.push(t);
+                    }
+                }
+
+                ts.sort((a, b) => a - b);
+
+                const uniqueTs = [];
+                for (let i = 0; i < ts.length; i++) {
+                    if (i === 0 || ts[i] - uniqueTs[uniqueTs.length - 1] > 1e-6) {
+                        uniqueTs.push(ts[i]);
+                    }
+                }
+
+                for (let i = 0; i < uniqueTs.length - 1; i++) {
+                    const tStart = uniqueTs[i];
+                    const tEnd = uniqueTs[i + 1];
+                    const tMid = (tStart + tEnd) / 2;
+                    const projMid = segment.pA + tMid * (segment.pB - segment.pA);
+
+                    let unitIdx = units - 1;
+                    for (let unit = 0; unit < units; unit++) {
+                        if (projMid <= boundaries[unit] + 1e-5 && projMid >= boundaries[unit + 1] - 1e-5) {
+                            unitIdx = unit;
+                            break;
+                        }
+                    }
+
+                    const subLen = (tEnd - tStart) * segment.len;
+                    if (subLen < 0.1) continue;
+
+                    const midX = segment.start.x + tMid * (segment.end.x - segment.start.x);
+                    const midY = segment.start.y + tMid * (segment.end.y - segment.start.y);
+                    const dx = segment.end.x - segment.start.x;
+                    const dy = segment.end.y - segment.start.y;
+                    const tangent = segment.len > 1e-6
+                        ? { x: dx / segment.len, y: dy / segment.len }
+                        : { x: 1, y: 0 };
+
+                    points.push({
+                        buildingIndex,
+                        buildingName: building.name || `建筑${buildingIndex + 1}`,
+                        floor: floor + 1,
+                        unit: getDisplayUnitNumber(building, unitIdx, units),
+                        x: midX + segment.outward.x * 0.5,
+                        y: midY + segment.outward.y * 0.5,
+                        z: windowHeight,
+                        wallDataX: midX,
+                        wallDataY: midY,
+                        outward: segment.outward,
+                        tangent: tangent,
+                        cellWidth: getHeatmapCellWidth(subLen),
+                        sunlightHours: 0
+                    });
+                }
             }
         }
+
         return points;
     }
 
@@ -543,6 +699,87 @@
         return intersects.length === 0;
     }
 
+    function buildSunlightResultsFromPoints(allPoints, declination, latitude, timeStep) {
+        const results = {
+            points: allPoints,
+            declination,
+            latitude,
+            timeStep,
+            buildings: {}
+        };
+
+        let sumUnitHours = 0;
+        let totalUnits = 0;
+        let globalMin = Infinity;
+        let globalMax = 0;
+        const standardHours = CONFIG.SUNLIGHT_ANALYSIS.STANDARD_HOURS || 2;
+
+        allPoints.forEach(point => {
+            const buildingKey = String(point.buildingIndex);
+            if (!results.buildings[buildingKey]) {
+                results.buildings[buildingKey] = {
+                    name: point.buildingName,
+                    units: [],
+                    unitsMap: new Map(),
+                    minHours: Infinity,
+                    maxHours: 0,
+                    avgHours: 0,
+                    totalUnits: 0
+                };
+            }
+
+            const buildingResult = results.buildings[buildingKey];
+            const unitKey = `${point.floor}-${point.unit}`;
+            if (!buildingResult.unitsMap.has(unitKey)) {
+                buildingResult.unitsMap.set(unitKey, []);
+            }
+            buildingResult.unitsMap.get(unitKey).push(point);
+        });
+
+        for (const key of Object.keys(results.buildings)) {
+            const buildingResult = results.buildings[key];
+            let buildingSum = 0;
+
+            for (const unitPoints of buildingResult.unitsMap.values()) {
+                let unitMaxHours = 0;
+                unitPoints.forEach(point => {
+                    unitMaxHours = Math.max(unitMaxHours, Number(point.sunlightHours) || 0);
+                });
+
+                unitPoints.forEach(point => {
+                    point.unitMaxHours = unitMaxHours;
+                });
+
+                buildingResult.units.push(...unitPoints);
+                buildingResult.minHours = Math.min(buildingResult.minHours, unitMaxHours);
+                buildingResult.maxHours = Math.max(buildingResult.maxHours, unitMaxHours);
+                buildingResult.totalUnits++;
+                buildingSum += unitMaxHours;
+                sumUnitHours += unitMaxHours;
+                totalUnits++;
+                globalMin = Math.min(globalMin, unitMaxHours);
+                globalMax = Math.max(globalMax, unitMaxHours);
+            }
+
+            buildingResult.avgHours = buildingResult.totalUnits > 0 ? (buildingSum / buildingResult.totalUnits) : 0;
+            delete buildingResult.unitsMap;
+        }
+
+        results.totalUnits = totalUnits;
+        results.minHours = globalMin === Infinity ? 0 : globalMin;
+        results.maxHours = globalMax;
+        results.avgHours = totalUnits > 0 ? (sumUnitHours / totalUnits) : 0;
+        results.belowStandard = totalUnits === 0
+            ? 0
+            : allPoints.filter(point => point.unitMaxHours < standardHours)
+                .reduce((set, point) => {
+                    set.add(`${point.buildingIndex}-${point.floor}-${point.unit}`);
+                    return set;
+                }, new Set()).size;
+
+        return results;
+    }
+
     /**
      * 执行日照时长计算
      */
@@ -561,14 +798,12 @@
             if (isNaN(declination)) declination = 0;
         }
         
-        const timeStep = CONFIG.SUNLIGHT_ANALYSIS.TIME_INTERVAL; // 固定6分钟间隔
+        const timeStep = CONFIG.SUNLIGHT_ANALYSIS.TIME_INTERVAL;
 
-        // 收集本小区建筑的采样点
         const allPoints = [];
-        currentData.buildings.forEach((b, idx) => {
-            if (b.isThisCommunity) {
-                const points = calculateSamplingPoints(b, idx);
-                allPoints.push(...points);
+        currentData.buildings.forEach((building, idx) => {
+            if (building.isThisCommunity) {
+                allPoints.push(...calculateSamplingPoints(building, idx));
             }
         });
 
@@ -577,21 +812,16 @@
             return null;
         }
 
-        // 收集用于遮挡检测的建筑物mesh
         const buildingMeshes = collectBuildingMeshes();
         const raycaster = new THREE.Raycaster();
-
-        // 计算时间点
         const timePoints = [];
+
         for (let hour = 6; hour <= 18; hour += timeStep) {
             timePoints.push(hour);
         }
 
         const totalSteps = allPoints.length * timePoints.length;
         let completedSteps = 0;
-
-        // 为了不阻塞UI，使用分批处理
-        const batchSize = 100;
 
         for (let pointIdx = 0; pointIdx < allPoints.length; pointIdx++) {
             const point = allPoints[pointIdx];
@@ -604,7 +834,6 @@
                 completedSteps++;
             }
 
-            // 每处理一定数量的点，更新进度并让出控制权
             if (pointIdx % 10 === 0) {
                 const progress = completedSteps / totalSteps;
                 if (progressCallback) progressCallback(progress);
@@ -612,53 +841,7 @@
             }
         }
 
-        // 汇总结果
-        const results = {
-            points: allPoints,
-            declination,
-            latitude: LATITUDE,
-            timeStep,
-            buildings: {}
-        };
-
-        // 按建筑汇总
-        allPoints.forEach(p => {
-            if (!results.buildings[p.buildingName]) {
-                results.buildings[p.buildingName] = {
-                    name: p.buildingName,
-                    units: [],
-                    minHours: Infinity,
-                    maxHours: 0,
-                    avgHours: 0,
-                    totalUnits: 0
-                };
-            }
-            const bldg = results.buildings[p.buildingName];
-            bldg.units.push(p);
-            bldg.minHours = Math.min(bldg.minHours, p.sunlightHours);
-            bldg.maxHours = Math.max(bldg.maxHours, p.sunlightHours);
-            bldg.avgHours += p.sunlightHours;
-            bldg.totalUnits++;
-        });
-
-        // 计算平均值
-        for (const key of Object.keys(results.buildings)) {
-            const b = results.buildings[key];
-            if (b.totalUnits > 0) {
-                b.avgHours = b.avgHours / b.totalUnits;
-            }
-        }
-
-        // 全局统计
-        results.totalUnits = allPoints.length;
-        results.minHours = Math.min(...allPoints.map(p => p.sunlightHours));
-        results.maxHours = Math.max(...allPoints.map(p => p.sunlightHours));
-        results.avgHours = allPoints.reduce((sum, p) => sum + p.sunlightHours, 0) / allPoints.length;
-
-        // 统计不满足标准的户数（冬至日照不足2小时）
-        results.belowStandard = allPoints.filter(p => p.sunlightHours < 2).length;
-
-        return results;
+        return buildSunlightResultsFromPoints(allPoints, declination, LATITUDE, timeStep);
     }
 
     /**
@@ -702,7 +885,7 @@
     }
 
     /**
-     * 创建热力图显示层 - 贴在南面墙上（户号从东向西）
+     * 创建热力图显示层 - 贴在实际受光立面片段上
      */
     function createHeatmapLayer(results) {
         clearGroup(heatmapGroup);
@@ -715,21 +898,8 @@
             if (!building) return;
 
             const floorHeight = building.floorHeight || 3;
-            const units = building.units || 1;
-            const southFace = findSouthFace(building.shape);
-            if (!southFace) return;
-
-            const startX = southFace.start.x;
-            const startY = southFace.start.y;
-            const endX = southFace.end.x;
-            const endY = southFace.end.y;
-            const dx = endX - startX;
-            const dy = endY - startY;
-            const faceLength = Math.sqrt(dx * dx + dy * dy);
-
-            const unitWidth = faceLength / units;
-            const cellWidth = unitWidth * 0.95;
             const cellHeight = floorHeight * 0.9;
+            const cellWidth = Math.max(0.06, Number(point.cellWidth) || 0.6);
 
             const geometry = new THREE.PlaneGeometry(cellWidth, cellHeight);
             const color = getSunlightColor(point.sunlightHours, maxHours);
@@ -745,27 +915,48 @@
             });
 
             const mesh = new THREE.Mesh(geometry, material);
-
-            // 计算位置时的 t 也要反向，以匹配 point.unit
-            const t = (units - point.unit + 0.5) / units;
-
-            const wallDataX = startX + dx * t;
-            const wallDataY = startY + dy * t;
             const wallHeight = (point.floor - 0.5) * floorHeight;
-
-            const normalX = -dy / faceLength;
-            const normalZ = dx / faceLength;
+            const normalX = point.outward?.x || 0;
+            const normalZ = point.outward?.y || 0;
             const offset = 0.3;
+            const wallDataX = point.wallDataX;
+            const wallDataY = point.wallDataY;
+            const tangentX = point.tangent?.x || 1;
+            const tangentZ = point.tangent?.y || 0;
 
             mesh.position.set(wallDataX + normalX * offset, wallHeight, wallDataY + normalZ * offset);
-            mesh.lookAt(wallDataX + normalX * 100, wallHeight, wallDataY + normalZ * 100);
+
+            const upAxis = new THREE.Vector3(0, 1, 0);
+            const outwardAxis = new THREE.Vector3(normalX, 0, normalZ);
+
+            let xAxis;
+            if (outwardAxis.lengthSq() > 1e-8) {
+                outwardAxis.normalize();
+                xAxis = new THREE.Vector3().crossVectors(upAxis, outwardAxis);
+                if (xAxis.lengthSq() < 1e-8) xAxis.set(1, 0, 0);
+                xAxis.normalize();
+
+                const tangentAxis = new THREE.Vector3(tangentX, 0, tangentZ);
+                if (tangentAxis.lengthSq() > 1e-8 && xAxis.dot(tangentAxis) < 0) {
+                    xAxis.negate();
+                }
+            } else {
+                xAxis = new THREE.Vector3(tangentX, 0, tangentZ);
+                if (xAxis.lengthSq() < 1e-8) xAxis.set(1, 0, 0);
+                xAxis.normalize();
+            }
+
+            const zAxis = new THREE.Vector3().crossVectors(xAxis, upAxis).normalize();
+            const rotationMatrix = new THREE.Matrix4().makeBasis(xAxis, upAxis, zAxis);
+            mesh.quaternion.setFromRotationMatrix(rotationMatrix);
 
             mesh.userData = {
                 type: 'heatmapCell',
                 buildingName: point.buildingName,
                 floor: point.floor,
                 unit: point.unit,
-                sunlightHours: point.sunlightHours
+                sunlightHours: point.sunlightHours,
+                unitMaxHours: point.unitMaxHours
             };
 
             heatmapGroup.add(mesh);
@@ -1489,20 +1680,29 @@
         title.textContent = `${data.buildingName}`;
 
         const hours = data.sunlightHours;
+        const unitMaxHours = Number.isFinite(data.unitMaxHours) ? data.unitMaxHours : null;
+        const statusHours = unitMaxHours != null ? unitMaxHours : hours;
         const maxHours = CONFIG.SUNLIGHT_ANALYSIS.MAX_HOURS;
         const percent = Math.min(hours / maxHours * 100, 100);
         const color = getSunlightColor(hours, maxHours);
         const colorHex = '#' + color.getHexString();
+        const currentLang = i18n.getCurrentLanguage();
 
         let statusText = i18n.t('viewer.statusGood');
         let statusClass = 'good';
-        if (hours < 2) {
+        if (statusHours < 2) {
             statusText = i18n.t('viewer.statusBad');
             statusClass = 'bad';
-        } else if (hours < 3) {
+        } else if (statusHours < 3) {
             statusText = i18n.t('viewer.statusWarning');
             statusClass = 'warning';
         }
+
+        const unitMaxText = unitMaxHours == null
+            ? ''
+            : (currentLang === 'zh'
+                ? `（户最大 ${unitMaxHours.toFixed(1)}h）`
+                : `(Unit max ${unitMaxHours.toFixed(1)}h)`);
 
         content.innerHTML = `
             <div class="info-row">
@@ -1515,7 +1715,7 @@
             </div>
             <div class="info-row">
                 <span class="info-label">${esc(i18n.t('viewer.sunlightDuration'))}</span>
-                <span class="info-value" style="color: ${colorHex}">${hours.toFixed(1)} ${esc(i18n.t('viewer.sunlightHours'))}</span>
+                <span class="info-value" style="color: ${colorHex}">${hours.toFixed(1)} ${esc(i18n.t('viewer.sunlightHours'))} <span style="font-size: 0.85em; color: #777;">${esc(unitMaxText)}</span></span>
             </div>
             <div class="info-row">
                 <span class="info-label">${esc(i18n.t('viewer.sunlightStatus'))}</span>

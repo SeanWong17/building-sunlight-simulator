@@ -165,6 +165,17 @@ const DEFAULT_DATA = {
       "floors": 10,
       "floorHeight": 3,
       "units": 6,
+      "unitNumberingStartSide": "B",
+      "unitRatiosPerFloor": [
+        [
+          0.16,
+          0.17,
+          0.17,
+          0.17,
+          0.17,
+          0.16
+        ]
+      ],
       "totalHeight": 30,
       "isThisCommunity": true,
       "shape": [
@@ -195,6 +206,15 @@ const DEFAULT_DATA = {
       "floors": 7,
       "floorHeight": 3.1,
       "units": 4,
+      "unitSplitAngleDeg": 90,
+      "unitRatiosPerFloor": [
+        [
+          0.22,
+          0.28,
+          0.28,
+          0.22
+        ]
+      ],
       "totalHeight": 21.7,
       "isThisCommunity": true,
       "shape": [

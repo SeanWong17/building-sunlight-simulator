@@ -178,7 +178,8 @@ h3 {
 input[type="text"],
 input[type="number"],
 input[type="file"],
-select {
+select,
+textarea {
     width: 100%;
     box-sizing: border-box;
     padding: 8px;
@@ -366,6 +367,23 @@ td input {
     font-size: 12px;
 }
 
+td select,
+td textarea {
+    width: 100%;
+    padding: 6px;
+    box-sizing: border-box;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: inherit;
+}
+
+td textarea {
+    resize: vertical;
+    min-height: 72px;
+    line-height: 1.45;
+}
+
 td .btn-mini {
     display: inline-block;
     padding: 4px 8px;
@@ -382,6 +400,57 @@ td .btn-mini {
 
 .btn-danger:hover {
     background: #c82333;
+}
+
+.split-config-row td {
+    background: #fbfdff;
+    padding: 0;
+}
+
+.split-config-card {
+    padding: 10px 12px 12px;
+    border-top: 1px solid #eef3f8;
+}
+
+.split-config-title {
+    margin: 0 0 8px;
+    color: #1f4d7a;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.split-config-grid {
+    display: grid;
+    grid-template-columns: 120px 160px minmax(220px, 1fr);
+    gap: 10px;
+    align-items: start;
+}
+
+.split-config-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.split-config-label {
+    color: #425466;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.split-config-help {
+    color: #6b7280;
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.split-config-help.invalid {
+    color: #c0392b;
+}
+
+.split-config-input.invalid {
+    border-color: #dc3545;
+    background: #fff5f5;
 }
 
 /* 响应式 */
@@ -414,6 +483,10 @@ td .btn-mini {
 
     #table-wrapper {
         max-height: 55vh;
+    }
+
+    .split-config-grid {
+        grid-template-columns: 1fr;
     }
 }
 

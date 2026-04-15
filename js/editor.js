@@ -27,6 +27,7 @@
     const defFloorHeightEl = document.getElementById('defFloorHeight');
     const defUnitsEl = document.getElementById('defUnits');
     const defIsThisCommunityEl = document.getElementById('defIsThisCommunity');
+    const defUnitNumberingStartFromSideBEl = document.getElementById('defUnitNumberingStartFromSideB');
     const btnApplyDefaultsAll = document.getElementById('btnApplyDefaultsAll');
     const chkUseDefaults = document.getElementById('chkUseDefaults');
 
@@ -49,9 +50,182 @@
     // 使用配置常量
     const CLOSE_EPS_BASE = CONFIG.EDITOR.CLOSE_EPSILON;
     const SANITIZE_EPS = CONFIG.EDITOR.SANITIZE_EPSILON;
+    const TABLE_COLUMN_COUNT = 6;
 
     // ========== 工具函数（使用 Utils 模块）==========
     const { distance, pointsEqual, clampInt, clampFloat, getPolygonCenter, normalizeAngle } = Utils;
+
+    // Basic unit-split editing flow adapted from wingkinl/building-sunlight-simulator (MIT).
+    function normalizeUnitNumberingStartSide(value) {
+        return value === 'B' ? 'B' : 'A';
+    }
+
+    function getBuildingUnitNumberingStartSide(building) {
+        return normalizeUnitNumberingStartSide(building?.unitNumberingStartSide);
+    }
+
+    function buildEqualUnitRatios(units) {
+        const count = Math.max(1, parseInt(units || 1, 10));
+        return new Array(count).fill(1 / count);
+    }
+
+    function normalizeUnitRatios(ratios, units) {
+        const count = Math.max(1, parseInt(units || 1, 10));
+        if (!Array.isArray(ratios) || ratios.length !== count) return null;
+
+        const cleaned = ratios.map(value => {
+            const num = Number(value);
+            return Number.isFinite(num) ? num : NaN;
+        });
+        if (cleaned.some(value => !Number.isFinite(value) || value < 0)) return null;
+
+        const sum = cleaned.reduce((acc, value) => acc + value, 0);
+        if (sum <= 1e-9) return null;
+
+        return cleaned.map(value => value / sum);
+    }
+
+    function unitRatiosMatch(a, b, eps = 1e-6) {
+        if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+        for (let i = 0; i < a.length; i++) {
+            if (Math.abs((Number(a[i]) || 0) - (Number(b[i]) || 0)) > eps) return false;
+        }
+        return true;
+    }
+
+    function getSharedFirstFloorUnitRatios(unitRatiosPerFloor, floors, units) {
+        const totalFloors = Math.max(1, parseInt(floors || 1, 10));
+        if (!Array.isArray(unitRatiosPerFloor) || unitRatiosPerFloor.length === 0) return null;
+
+        const first = normalizeUnitRatios(unitRatiosPerFloor[0], units);
+        if (!first) return null;
+
+        for (let i = 1; i < totalFloors; i++) {
+            const next = unitRatiosPerFloor[i];
+            if (next == null) continue;
+
+            const normalized = normalizeUnitRatios(next, units);
+            if (!normalized || !unitRatiosMatch(normalized, first)) {
+                return null;
+            }
+        }
+
+        return first;
+    }
+
+    function serializeUnitRatiosPerFloor(unitRatiosPerFloor, floors, units) {
+        const totalFloors = Math.max(1, parseInt(floors || 1, 10));
+        const perFloor = [];
+        let hasAny = false;
+
+        for (let floorIndex = 0; floorIndex < totalFloors; floorIndex++) {
+            const normalized = normalizeUnitRatios(unitRatiosPerFloor?.[floorIndex], units);
+            perFloor.push(normalized);
+            if (normalized) hasAny = true;
+        }
+
+        if (!hasAny) return null;
+
+        const sharedFirst = getSharedFirstFloorUnitRatios(perFloor, totalFloors, units);
+        if (sharedFirst) return [sharedFirst.slice()];
+        return perFloor;
+    }
+
+    function formatUnitRatiosText(building) {
+        const floors = Math.max(1, parseInt(building?.floors || 1, 10));
+        const units = Math.max(1, parseInt(building?.units || 1, 10));
+        const serialized = serializeUnitRatiosPerFloor(building?.unitRatiosPerFloor, floors, units);
+        if (!Array.isArray(serialized) || serialized.length === 0) return '';
+
+        return serialized
+            .map(line => Array.isArray(line) ? line.map(value => Number(value).toFixed(4).replace(/0+$/, '').replace(/\.$/, '')).join(', ') : '')
+            .filter(Boolean)
+            .join('\n');
+    }
+
+    function ensureBuildingSplitState(building) {
+        if (!building) return;
+        building.unitSplitAngleDeg = Number.isFinite(Number(building.unitSplitAngleDeg))
+            ? normalizeAngle(Number(building.unitSplitAngleDeg))
+            : 0;
+        building.unitNumberingStartSide = getBuildingUnitNumberingStartSide(building);
+        if (typeof building.unitRatiosInput !== 'string') {
+            building.unitRatiosInput = formatUnitRatiosText(building);
+        }
+    }
+
+    function parseUnitRatioLine(text, units) {
+        const parts = String(text || '')
+            .trim()
+            .split(/[,\s，]+/)
+            .filter(Boolean);
+
+        if (parts.length !== units) {
+            return { error: i18n.t('editor.splitRatiosErrorValueCount') };
+        }
+
+        const values = parts.map(value => Number(value));
+        const normalized = normalizeUnitRatios(values, units);
+        if (!normalized) {
+            return { error: i18n.t('editor.splitRatiosErrorNumber') };
+        }
+
+        return { value: normalized };
+    }
+
+    function parseUnitRatiosInput(text, floors, units) {
+        const raw = String(text || '').trim();
+        if (!raw) return { value: null };
+
+        const lines = raw
+            .split(/\r?\n/)
+            .map(line => line.trim())
+            .filter(Boolean);
+
+        if (lines.length !== 1 && lines.length !== floors) {
+            return { error: i18n.t('editor.splitRatiosErrorLineCount') };
+        }
+
+        const parsed = [];
+        for (const line of lines) {
+            const result = parseUnitRatioLine(line, units);
+            if (result.error) return result;
+            parsed.push(result.value);
+        }
+
+        if (lines.length === 1) {
+            return { value: [parsed[0]] };
+        }
+
+        return { value: parsed };
+    }
+
+    function buildUnitRatiosExportValue(building) {
+        const floors = Math.max(1, parseInt(building?.floors || 1, 10));
+        const units = Math.max(1, parseInt(building?.units || 1, 10));
+        const parsed = parseUnitRatiosInput(building?.unitRatiosInput, floors, units);
+        if (parsed.error) return parsed;
+        if (!parsed.value) return { value: null };
+
+        const serialized = serializeUnitRatiosPerFloor(parsed.value, floors, units);
+        if (!serialized) return { value: null };
+
+        const equal = buildEqualUnitRatios(units);
+        const isDefaultEqual = serialized.length === 1 && unitRatiosMatch(serialized[0], equal);
+        if (isDefaultEqual) return { value: null };
+
+        return {
+            value: serialized.map(line => Array.isArray(line)
+                ? line.map(value => Utils.roundTo(value, 6))
+                : null)
+        };
+    }
+
+    function getSplitConfigValidation(building) {
+        const floors = Math.max(1, parseInt(building?.floors || 1, 10));
+        const units = Math.max(1, parseInt(building?.units || 1, 10));
+        return parseUnitRatiosInput(building?.unitRatiosInput, floors, units);
+    }
 
     /**
      * 多边形净化 - 移除重复点、过短边、共线点
@@ -534,8 +708,12 @@
             floorHeight: useDefaults ? clampFloat(parseFloat(defFloorHeightEl.value), validation.FLOOR_HEIGHT.MIN, validation.FLOOR_HEIGHT.MAX, CONFIG.DEFAULTS.FLOOR_HEIGHT) : CONFIG.DEFAULTS.FLOOR_HEIGHT,
             units: useDefaults ? clampInt(parseInt(defUnitsEl.value), validation.UNITS.MIN, validation.UNITS.MAX, CONFIG.DEFAULTS.UNITS_PER_FLOOR) : CONFIG.DEFAULTS.UNITS_PER_FLOOR,
             isThisCommunity: useDefaults ? !!defIsThisCommunityEl.checked : CONFIG.DEFAULTS.IS_THIS_COMMUNITY,
+            unitSplitAngleDeg: 0,
+            unitNumberingStartSide: useDefaults && defUnitNumberingStartFromSideBEl?.checked ? 'B' : 'A',
+            unitRatiosInput: '',
             points: cleaned
         };
+        ensureBuildingSplitState(b);
         buildings.push(b);
         currentPoly = [];
         renderTable();
@@ -599,6 +777,7 @@
     function renderTable() {
         tableBody.innerHTML = '';
         buildings.forEach((b, i) => {
+            ensureBuildingSplitState(b);
             const tr = document.createElement('tr');
 
             // 名称
@@ -623,6 +802,7 @@
             inpFloors.addEventListener('change', () => {
                 b.floors = clampInt(parseInt(inpFloors.value), 1, 300, b.floors);
                 inpFloors.value = b.floors;
+                renderTable();
             });
             tdFloors.appendChild(inpFloors);
 
@@ -649,6 +829,7 @@
             inpUnits.addEventListener('change', () => {
                 b.units = clampInt(parseInt(inpUnits.value), 1, 50, b.units);
                 inpUnits.value = b.units;
+                renderTable();
             });
             tdUnits.appendChild(inpUnits);
 
@@ -685,6 +866,102 @@
             tr.appendChild(tdOps);
 
             tableBody.appendChild(tr);
+
+            const splitValidation = getSplitConfigValidation(b);
+            const splitTr = document.createElement('tr');
+            splitTr.className = 'split-config-row';
+
+            const splitTd = document.createElement('td');
+            splitTd.colSpan = TABLE_COLUMN_COUNT;
+
+            const splitCard = document.createElement('div');
+            splitCard.className = 'split-config-card';
+
+            const splitTitle = document.createElement('div');
+            splitTitle.className = 'split-config-title';
+            splitTitle.textContent = i18n.t('editor.splitConfigTitle');
+            splitCard.appendChild(splitTitle);
+
+            const splitGrid = document.createElement('div');
+            splitGrid.className = 'split-config-grid';
+
+            const angleField = document.createElement('div');
+            angleField.className = 'split-config-field';
+            const angleLabel = document.createElement('label');
+            angleLabel.className = 'split-config-label';
+            angleLabel.textContent = i18n.t('editor.splitAngle');
+            const angleInput = document.createElement('input');
+            angleInput.type = 'number';
+            angleInput.step = '0.1';
+            angleInput.min = '-180';
+            angleInput.max = '180';
+            angleInput.value = String(Number(b.unitSplitAngleDeg || 0));
+            angleInput.addEventListener('change', () => {
+                b.unitSplitAngleDeg = normalizeAngle(parseFloat(angleInput.value));
+                angleInput.value = String(b.unitSplitAngleDeg);
+            });
+            angleField.appendChild(angleLabel);
+            angleField.appendChild(angleInput);
+
+            const numberingField = document.createElement('div');
+            numberingField.className = 'split-config-field';
+            const numberingLabel = document.createElement('label');
+            numberingLabel.className = 'split-config-label';
+            numberingLabel.textContent = i18n.t('editor.splitNumberingStartSide');
+            const numberingSelect = document.createElement('select');
+            const sideAOption = document.createElement('option');
+            sideAOption.value = 'A';
+            sideAOption.textContent = i18n.t('editor.splitNumberingSideA');
+            const sideBOption = document.createElement('option');
+            sideBOption.value = 'B';
+            sideBOption.textContent = i18n.t('editor.splitNumberingSideB');
+            numberingSelect.appendChild(sideAOption);
+            numberingSelect.appendChild(sideBOption);
+            numberingSelect.value = getBuildingUnitNumberingStartSide(b);
+            numberingSelect.addEventListener('change', () => {
+                b.unitNumberingStartSide = normalizeUnitNumberingStartSide(numberingSelect.value);
+            });
+            numberingField.appendChild(numberingLabel);
+            numberingField.appendChild(numberingSelect);
+
+            const ratiosField = document.createElement('div');
+            ratiosField.className = 'split-config-field';
+            const ratiosLabel = document.createElement('label');
+            ratiosLabel.className = 'split-config-label';
+            ratiosLabel.textContent = i18n.t('editor.splitRatios');
+            const ratiosInput = document.createElement('textarea');
+            ratiosInput.rows = Math.min(Math.max(parseInt(b.floors || 1, 10), 2), 4);
+            ratiosInput.placeholder = i18n.t('editor.splitRatiosPlaceholder');
+            ratiosInput.value = b.unitRatiosInput || '';
+            if (splitValidation.error) {
+                ratiosInput.classList.add('split-config-input', 'invalid');
+            }
+            ratiosInput.addEventListener('input', () => {
+                b.unitRatiosInput = ratiosInput.value;
+                const validation = getSplitConfigValidation(b);
+                ratiosInput.classList.toggle('split-config-input', !!validation.error);
+                ratiosInput.classList.toggle('invalid', !!validation.error);
+                helpText.classList.toggle('invalid', !!validation.error);
+                helpText.textContent = validation.error
+                    ? validation.error
+                    : `${i18n.t('editor.splitRatiosHelp')} ${i18n.t('editor.splitRatiosExamples')}`;
+            });
+            const helpText = document.createElement('div');
+            helpText.className = splitValidation.error ? 'split-config-help invalid' : 'split-config-help';
+            helpText.textContent = splitValidation.error
+                ? splitValidation.error
+                : `${i18n.t('editor.splitRatiosHelp')} ${i18n.t('editor.splitRatiosExamples')}`;
+            ratiosField.appendChild(ratiosLabel);
+            ratiosField.appendChild(ratiosInput);
+            ratiosField.appendChild(helpText);
+
+            splitGrid.appendChild(angleField);
+            splitGrid.appendChild(numberingField);
+            splitGrid.appendChild(ratiosField);
+            splitCard.appendChild(splitGrid);
+            splitTd.appendChild(splitCard);
+            splitTr.appendChild(splitTd);
+            tableBody.appendChild(splitTr);
         });
     }
 
@@ -695,7 +972,16 @@
         const h = clampFloat(parseFloat(defFloorHeightEl.value), validation.FLOOR_HEIGHT.MIN, validation.FLOOR_HEIGHT.MAX, CONFIG.DEFAULTS.FLOOR_HEIGHT);
         const u = clampInt(parseInt(defUnitsEl.value), validation.UNITS.MIN, validation.UNITS.MAX, CONFIG.DEFAULTS.UNITS_PER_FLOOR);
         const own = !!defIsThisCommunityEl.checked;
-        buildings = buildings.map(b => ({ ...b, floors: f, floorHeight: h, units: u, isThisCommunity: own }));
+        const numberingStartSide = defUnitNumberingStartFromSideBEl?.checked ? 'B' : 'A';
+        buildings = buildings.map(b => ({
+            ...b,
+            floors: f,
+            floorHeight: h,
+            units: u,
+            isThisCommunity: own,
+            unitNumberingStartSide: numberingStartSide
+        }));
+        buildings.forEach(ensureBuildingSplitState);
         renderTable();
         draw();
     });
@@ -732,34 +1018,56 @@
         const northAngle = normalizeAngle(parseFloat(projectNorthAngleEl.value));
         projectNorthAngleEl.value = northAngle;
 
-        const exportData = {
-            version: CONFIG.APP.VERSION,
-            latitude: lat,
-            northAngle,
-            scaleRatio: scaleRatio,
-            origin: { x: centerX, y: centerY },
-            buildings: buildings.map(b => {
-                const c = getPolygonCenter(b.points);
-                const cx = (c.x - centerX) * scaleRatio;
-                const cy = (c.y - centerY) * scaleRatio;
+        try {
+            const exportData = {
+                version: CONFIG.APP.VERSION,
+                latitude: lat,
+                northAngle,
+                scaleRatio: scaleRatio,
+                origin: { x: centerX, y: centerY },
+                buildings: buildings.map(b => {
+                    ensureBuildingSplitState(b);
+                    const splitRatiosResult = buildUnitRatiosExportValue(b);
+                    if (splitRatiosResult.error) {
+                        throw new Error(
+                            i18n.t('editor.alertInvalidSplitConfig')
+                                .replace('{0}', b.name || i18n.t('viewer.defaultBuildingName').replace('{0}', '?'))
+                                .replace('{1}', splitRatiosResult.error)
+                        );
+                    }
 
-                return {
-                    name: b.name,
-                    floors: b.floors,
-                    floorHeight: b.floorHeight,
-                    units: b.units,
-                    totalHeight: b.floors * b.floorHeight,
-                    isThisCommunity: b.isThisCommunity !== false,
-                    shape: b.points.map(p => ({
-                        x: round2((p.x - centerX) * scaleRatio),
-                        y: round2((p.y - centerY) * scaleRatio)
-                    })),
-                    center: { x: round2(cx), y: round2(cy) }
-                };
-            })
-        };
+                    const c = getPolygonCenter(b.points);
+                    const cx = (c.x - centerX) * scaleRatio;
+                    const cy = (c.y - centerY) * scaleRatio;
 
-        Utils.downloadFile(JSON.stringify(exportData, null, 2), 'buildings_config.json', 'application/json');
+                    const splitAngle = Number.isFinite(Number(b.unitSplitAngleDeg))
+                        ? normalizeAngle(Number(b.unitSplitAngleDeg))
+                        : 0;
+                    const numberingStartSide = getBuildingUnitNumberingStartSide(b);
+
+                    return {
+                        name: b.name,
+                        floors: b.floors,
+                        floorHeight: b.floorHeight,
+                        units: b.units,
+                        totalHeight: b.floors * b.floorHeight,
+                        isThisCommunity: b.isThisCommunity !== false,
+                        shape: b.points.map(p => ({
+                            x: round2((p.x - centerX) * scaleRatio),
+                            y: round2((p.y - centerY) * scaleRatio)
+                        })),
+                        center: { x: round2(cx), y: round2(cy) },
+                        unitRatiosPerFloor: splitRatiosResult.value || undefined,
+                        unitSplitAngleDeg: Math.abs(splitAngle) > 1e-6 ? Utils.roundTo(splitAngle, 3) : undefined,
+                        unitNumberingStartSide: numberingStartSide !== 'A' ? numberingStartSide : undefined
+                    };
+                })
+            };
+
+            Utils.downloadFile(JSON.stringify(exportData, null, 2), 'buildings_config.json', 'application/json');
+        } catch (error) {
+            alert(error?.message || i18n.t('editor.alertInvalidSplitConfig').replace('{0}', '').replace('{1}', ''));
+        }
     });
 
     // ========== 默认参数输入校验 ==========
@@ -934,6 +1242,9 @@
         
         // 更新绘制模式按钮
         updateDrawModeButton();
+
+        // 重新渲染表格中的动态文案
+        renderTable();
     }
 
     function updateZoomInfo() {
