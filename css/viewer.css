@@ -322,9 +322,23 @@ h2 {
     line-height: 1.6;
 }
 
+.sunlight-stats .stats-section + .stats-section {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #e3e8ee;
+}
+
+.sunlight-stats .stats-section-title {
+    margin: 0 0 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #2c3e50;
+}
+
 .sunlight-stats .stat-row {
     display: flex;
     justify-content: space-between;
+    gap: 12px;
     padding: 4px 0;
     border-bottom: 1px dashed #e0e0e0;
 }
@@ -340,6 +354,7 @@ h2 {
 .sunlight-stats .stat-value {
     font-weight: 600;
     color: #333;
+    text-align: right;
 }
 
 .sunlight-stats .stat-value.good {
@@ -352,6 +367,12 @@ h2 {
 
 .sunlight-stats .stat-value.bad {
     color: #dc3545;
+}
+
+.sunlight-stats .stat-note {
+    color: #6b7280;
+    font-size: 11px;
+    line-height: 1.5;
 }
 
 /* 户型信息面板 */

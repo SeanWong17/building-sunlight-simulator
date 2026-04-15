@@ -206,7 +206,7 @@ const DEFAULT_DATA = {
       "floors": 7,
       "floorHeight": 3.1,
       "units": 4,
-      "unitSplitAngleDeg": 90,
+      "unitSplitAngleDeg": 0,
       "unitRatiosPerFloor": [
         [
           0.22,

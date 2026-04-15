@@ -169,6 +169,16 @@
     const heatmapGroup = new THREE.Group();
     scene.add(heatmapGroup);
 
+    const HEATMAP_BASE_OPACITY = 0.85;
+    const HEATMAP_HOVER_OPACITY = 0.98;
+    const HEATMAP_SELECTED_OPACITY = 1.0;
+    const HEATMAP_HOVER_LIGHTEN = 0.18;
+    const HEATMAP_SELECTED_LIGHTEN = 0.34;
+    const HEATMAP_EDGE_LOCK_RATIO = 0.08;
+    const HEATMAP_EDGE_LOCK_MIN = 0.03;
+    const HEATMAP_EDGE_LOCK_MAX = 0.16;
+    const HEATMAP_OCCLUSION_EPS = 0.8;
+
     // ========== 状态变量 ==========
     let LATITUDE = 36.65;
     let NORTH_ANGLE = CONFIG.DEFAULTS.NORTH_ANGLE;
@@ -178,6 +188,11 @@
     let sunlightResults = null; // 存储日照计算结果
     let showHeatmap = false;
     let customDeclination = null; // 存储自定义日期的赤纬角
+    let hoverOccluderMeshes = [];
+    let heatmapCellsByApartmentKey = new Map();
+    let hoveredApartmentKey = null;
+    let selectedApartmentKey = null;
+    let currentUnitInfoData = null;
 
     function rotatePlanPoint(point, angleDeg) {
         const rad = angleDeg * Math.PI / 180;
@@ -251,7 +266,7 @@
     }
 
     // ========== 纹理与材质工具 ==========
-    function createFacadeTexture(floors, unitsPerFloor) {
+    function createFacadeTexture(floors, unitsPerFloor, unitRatiosPerFloor) {
         const floorPx = 28;
         const width = 512;
         const height = Math.max(floors * floorPx, 4);
@@ -274,9 +289,12 @@
 
             const nUnits = Math.max(1, unitsPerFloor[f] || 1);
             if (nUnits > 1) {
-                const step = width / nUnits;
-                for (let i = 1; i < nUnits; i++) {
-                    const x = Math.round(i * step);
+                const ratios = getUnitRatiosForFloor(unitRatiosPerFloor, f, floors, nUnits);
+                let acc = 0;
+                for (let i = 0; i < nUnits - 1; i++) {
+                    const ratio = ratios ? ratios[i] : (1 / nUnits);
+                    acc += ratio;
+                    const x = Math.round(acc * width);
                     ctx.fillStyle = 'rgba(35,45,60,0.6)';
                     ctx.fillRect(x - 1, y0, 2, bandH);
                     ctx.fillStyle = 'rgba(255,255,255,0.22)';
@@ -350,32 +368,42 @@
         return sprite;
     }
 
-    function makeUVGenerator(minX, maxX, minY, maxY, depth) {
-        const rangeX = Math.max(1e-6, maxX - minX);
-        const rangeY = Math.max(1e-6, maxY - minY);
-        const invDepth = depth > 0 ? 1 / depth : 1;
+    function makeUVGenerator(shape, totalHeight, axis) {
+        let minProj = Infinity;
+        let maxProj = -Infinity;
+
+        for (let i = 0; i < shape.length; i++) {
+            const proj = dot2(shape[i], axis);
+            if (proj < minProj) minProj = proj;
+            if (proj > maxProj) maxProj = proj;
+        }
+
+        const spanProj = Math.max(1e-6, maxProj - minProj);
+        const invDepth = totalHeight > 0 ? 1 / totalHeight : 1;
 
         return {
-            generateTopUV: function(geometry, vertices, a, b, c) {
-                const ax = vertices[a * 3], ay = vertices[a * 3 + 1];
-                const bx = vertices[b * 3], by = vertices[b * 3 + 1];
-                const cx = vertices[c * 3], cy = vertices[c * 3 + 1];
+            generateTopUV: function() {
                 return [
-                    new THREE.Vector2((ax - minX) / rangeX, (ay - minY) / rangeY),
-                    new THREE.Vector2((bx - minX) / rangeX, (by - minY) / rangeY),
-                    new THREE.Vector2((cx - minX) / rangeX, (cy - minY) / rangeY),
+                    new THREE.Vector2(0, 0),
+                    new THREE.Vector2(1, 0),
+                    new THREE.Vector2(0, 1),
                 ];
             },
             generateSideWallUV: function(geometry, vertices, a, b, c, d) {
-                const ax = vertices[a * 3], az = vertices[a * 3 + 2];
-                const bx = vertices[b * 3], bz = vertices[b * 3 + 2];
-                const cx = vertices[c * 3], cz = vertices[c * 3 + 2];
-                const dx = vertices[d * 3], dz = vertices[d * 3 + 2];
+                const ax = vertices[a * 3], ay = vertices[a * 3 + 1], az = vertices[a * 3 + 2];
+                const bx = vertices[b * 3], by = vertices[b * 3 + 1], bz = vertices[b * 3 + 2];
+                const cx = vertices[c * 3], cy = vertices[c * 3 + 1], cz = vertices[c * 3 + 2];
+                const dx = vertices[d * 3], dy = vertices[d * 3 + 1], dz = vertices[d * 3 + 2];
 
-                const uA = (ax - minX) / rangeX;
-                const uB = (bx - minX) / rangeX;
-                const uC = (cx - minX) / rangeX;
-                const uD = (dx - minX) / rangeX;
+                const projA = dot2({ x: ax, y: -ay }, axis);
+                const projB = dot2({ x: bx, y: -by }, axis);
+                const projC = dot2({ x: cx, y: -cy }, axis);
+                const projD = dot2({ x: dx, y: -dy }, axis);
+
+                const uA = (maxProj - projA) / spanProj;
+                const uB = (maxProj - projB) / spanProj;
+                const uC = (maxProj - projC) / spanProj;
+                const uD = (maxProj - projD) / spanProj;
 
                 const vA = az * invDepth;
                 const vB = bz * invDepth;
@@ -388,7 +416,7 @@
                     new THREE.Vector2(uC, vC),
                     new THREE.Vector2(uD, vD),
                 ];
-            }
+            },
         };
     }
 
@@ -682,6 +710,170 @@
         return meshes;
     }
 
+    function refreshHoverOccluderMeshes() {
+        hoverOccluderMeshes = collectBuildingMeshes();
+    }
+
+    function makeApartmentKey(data) {
+        if (!data) return '';
+        const buildingKey = data.buildingIndex != null ? data.buildingIndex : (data.buildingName || '');
+        return `${buildingKey}::${data.floor}::${data.unit}`;
+    }
+
+    // Heatmap hit filtering and split-edge locking were adapted from the wingkinl fork (MIT).
+    function filterHeatHitsByOcclusion(raycaster, heatHits) {
+        if (!Array.isArray(heatHits) || heatHits.length === 0) return [];
+        if (!Array.isArray(hoverOccluderMeshes) || hoverOccluderMeshes.length === 0) return heatHits;
+
+        const buildingHits = raycaster.intersectObjects(hoverOccluderMeshes, true);
+        const nearestBuildingHit = buildingHits.find(hit => hit && hit.distance > 1e-6);
+        if (!nearestBuildingHit) return heatHits;
+
+        const maxAcceptedDistance = nearestBuildingHit.distance + HEATMAP_OCCLUSION_EPS;
+        return heatHits.filter(hit => hit && hit.distance <= maxAcceptedDistance);
+    }
+
+    function isIntersectionNearCellEdge(intersection) {
+        const obj = intersection?.object;
+        if (!obj || !obj.geometry || typeof obj.worldToLocal !== 'function' || !intersection.point) {
+            return false;
+        }
+
+        const widthParam = obj.geometry.parameters?.width;
+        if (!isFinite(widthParam) || widthParam <= 0) return false;
+
+        const localPoint = obj.worldToLocal(intersection.point.clone());
+        const halfWidth = widthParam * 0.5;
+        const edgeGap = halfWidth - Math.abs(localPoint.x);
+        const lockBand = Math.max(
+            HEATMAP_EDGE_LOCK_MIN,
+            Math.min(HEATMAP_EDGE_LOCK_MAX, widthParam * HEATMAP_EDGE_LOCK_RATIO)
+        );
+
+        return edgeGap >= -1e-4 && edgeGap <= lockBand;
+    }
+
+    function findRepresentativeCell(apartmentKey) {
+        const cells = heatmapCellsByApartmentKey.get(apartmentKey);
+        return Array.isArray(cells) && cells.length > 0 ? cells[0] : null;
+    }
+
+    function findHitCellForApartment(heatHits, apartmentKey) {
+        if (!Array.isArray(heatHits) || !apartmentKey) return null;
+        const hit = heatHits.find(item => item?.object?.userData?.apartmentKey === apartmentKey);
+        return hit?.object || null;
+    }
+
+    function applyHeatmapCellVisual(mesh, options = {}) {
+        const material = mesh?.material;
+        const baseColor = material?.userData?.baseColor;
+        if (!material || !baseColor) return;
+
+        const isSelected = !!options.selected;
+        const isHovered = !!options.hovered;
+        const targetColor = baseColor.clone();
+        const lighten = isSelected
+            ? HEATMAP_SELECTED_LIGHTEN
+            : (isHovered ? HEATMAP_HOVER_LIGHTEN : 0);
+
+        if (lighten > 0) {
+            targetColor.lerp(new THREE.Color(1, 1, 1), lighten);
+        }
+
+        material.color.copy(targetColor);
+        material.opacity = isSelected
+            ? HEATMAP_SELECTED_OPACITY
+            : (isHovered ? HEATMAP_HOVER_OPACITY : (material.userData.baseOpacity ?? HEATMAP_BASE_OPACITY));
+        material.needsUpdate = true;
+        mesh.renderOrder = isSelected ? 4 : (isHovered ? 3 : 2);
+    }
+
+    function updateApartmentHighlight(apartmentKey) {
+        if (!apartmentKey) return;
+        const cells = heatmapCellsByApartmentKey.get(apartmentKey);
+        if (!Array.isArray(cells)) return;
+
+        const isSelected = apartmentKey === selectedApartmentKey;
+        const isHovered = apartmentKey === hoveredApartmentKey;
+        cells.forEach(mesh => applyHeatmapCellVisual(mesh, { selected: isSelected, hovered: isHovered }));
+    }
+
+    function refreshHeatmapHighlights(changedKeys = []) {
+        const keys = new Set(changedKeys.filter(Boolean));
+        if (selectedApartmentKey) keys.add(selectedApartmentKey);
+        if (hoveredApartmentKey) keys.add(hoveredApartmentKey);
+        keys.forEach(updateApartmentHighlight);
+    }
+
+    function setHoveredApartment(apartmentKey) {
+        if (apartmentKey === hoveredApartmentKey) return;
+        const previousKey = hoveredApartmentKey;
+        hoveredApartmentKey = apartmentKey || null;
+        refreshHeatmapHighlights([previousKey, hoveredApartmentKey]);
+    }
+
+    function setSelectedApartment(apartmentKey) {
+        if (apartmentKey === selectedApartmentKey) return;
+        const previousKey = selectedApartmentKey;
+        selectedApartmentKey = apartmentKey || null;
+        refreshHeatmapHighlights([previousKey, selectedApartmentKey]);
+    }
+
+    function clearHeatmapInteractionState(options = {}) {
+        const hidePanel = options.hidePanel !== false;
+        const changedKeys = [];
+        if (hoveredApartmentKey) changedKeys.push(hoveredApartmentKey);
+        if (selectedApartmentKey) changedKeys.push(selectedApartmentKey);
+
+        hoveredApartmentKey = null;
+        selectedApartmentKey = null;
+        currentUnitInfoData = null;
+        refreshHeatmapHighlights(changedKeys);
+        renderer.domElement.style.cursor = '';
+
+        if (hidePanel) {
+            document.getElementById('unitInfoPanel').style.display = 'none';
+        }
+        if (sunlightResults) {
+            showSunlightStats(sunlightResults);
+        }
+    }
+
+    function resetHeatmapHoverState() {
+        setHoveredApartment(null);
+        if (!selectedApartmentKey && currentUnitInfoData) {
+            currentUnitInfoData = null;
+            if (sunlightResults) {
+                showSunlightStats(sunlightResults);
+            }
+        }
+        renderer.domElement.style.cursor = '';
+    }
+
+    function pickApartmentKeyFromHeatHits(heatHits, fallbackApartmentKey, allowFirstOnAmbiguous = false) {
+        if (!Array.isArray(heatHits) || heatHits.length === 0) return null;
+
+        const firstHit = heatHits[0];
+        const firstData = firstHit.object?.userData;
+        const firstKey = firstData?.apartmentKey;
+        if (!firstKey) return null;
+
+        if (!isIntersectionNearCellEdge(firstHit)) return firstKey;
+
+        if (fallbackApartmentKey) {
+            const fallbackCell = findRepresentativeCell(fallbackApartmentKey);
+            if (fallbackCell) {
+                const sameBuilding = fallbackCell.userData?.buildingIndex === firstData?.buildingIndex;
+                const sameFloor = fallbackCell.userData?.floor === firstData?.floor;
+                if (sameBuilding && sameFloor) {
+                    return fallbackApartmentKey;
+                }
+            }
+        }
+
+        return allowFirstOnAmbiguous ? firstKey : null;
+    }
+
     /**
      * 检查某点在某时刻是否有日照
      */
@@ -739,6 +931,7 @@
         for (const key of Object.keys(results.buildings)) {
             const buildingResult = results.buildings[key];
             let buildingSum = 0;
+            let buildingBelowStandard = 0;
 
             for (const unitPoints of buildingResult.unitsMap.values()) {
                 let unitMaxHours = 0;
@@ -757,11 +950,13 @@
                 buildingSum += unitMaxHours;
                 sumUnitHours += unitMaxHours;
                 totalUnits++;
+                if (unitMaxHours < standardHours) buildingBelowStandard++;
                 globalMin = Math.min(globalMin, unitMaxHours);
                 globalMax = Math.max(globalMax, unitMaxHours);
             }
 
             buildingResult.avgHours = buildingResult.totalUnits > 0 ? (buildingSum / buildingResult.totalUnits) : 0;
+            buildingResult.belowStandard = buildingBelowStandard;
             delete buildingResult.unitsMap;
         }
 
@@ -889,6 +1084,10 @@
      */
     function createHeatmapLayer(results) {
         clearGroup(heatmapGroup);
+        heatmapCellsByApartmentKey = new Map();
+        hoveredApartmentKey = null;
+        selectedApartmentKey = null;
+        currentUnitInfoData = null;
         if (!results || !results.points) return;
 
         const maxHours = CONFIG.SUNLIGHT_ANALYSIS.MAX_HOURS; // 使用配置的8小时
@@ -907,12 +1106,14 @@
                 color: color,
                 side: THREE.DoubleSide,
                 transparent: true,
-                opacity: 0.85,
+                opacity: HEATMAP_BASE_OPACITY,
                 depthTest: true,
                 polygonOffset: true,
                 polygonOffsetFactor: -1,
                 polygonOffsetUnits: -1
             });
+            material.userData.baseColor = color.clone();
+            material.userData.baseOpacity = HEATMAP_BASE_OPACITY;
 
             const mesh = new THREE.Mesh(geometry, material);
             const wallHeight = (point.floor - 0.5) * floorHeight;
@@ -949,9 +1150,13 @@
             const zAxis = new THREE.Vector3().crossVectors(xAxis, upAxis).normalize();
             const rotationMatrix = new THREE.Matrix4().makeBasis(xAxis, upAxis, zAxis);
             mesh.quaternion.setFromRotationMatrix(rotationMatrix);
+            mesh.renderOrder = 2;
 
+            const apartmentKey = makeApartmentKey(point);
             mesh.userData = {
                 type: 'heatmapCell',
+                apartmentKey,
+                buildingIndex: point.buildingIndex,
                 buildingName: point.buildingName,
                 floor: point.floor,
                 unit: point.unit,
@@ -960,6 +1165,10 @@
             };
 
             heatmapGroup.add(mesh);
+            if (!heatmapCellsByApartmentKey.has(apartmentKey)) {
+                heatmapCellsByApartmentKey.set(apartmentKey, []);
+            }
+            heatmapCellsByApartmentKey.get(apartmentKey).push(mesh);
         });
     }
 
@@ -972,6 +1181,9 @@
 
         if (show && sunlightResults) {
             createHeatmapLayer(sunlightResults);
+            renderer.domElement.style.cursor = '';
+        } else {
+            clearHeatmapInteractionState();
         }
     }
 
@@ -1039,7 +1251,9 @@
 
     function clearSunlightResults() {
         sunlightResults = null;
+        clearHeatmapInteractionState();
         clearGroup(heatmapGroup);
+        heatmapCellsByApartmentKey = new Map();
         document.getElementById('toggleHeatmap').checked = false;
         document.getElementById('toggleHeatmap').disabled = true;
         document.getElementById('heatmapLegend').style.display = 'none';
@@ -1109,20 +1323,15 @@
             }
             shape.closePath();
 
-            const pts = b.shape.map(p => ({ x: p.x, y: -p.y }));
-            const minX = Math.min(...pts.map(p => p.x));
-            const maxX = Math.max(...pts.map(p => p.x));
-            const minY = Math.min(...pts.map(p => p.y));
-            const maxY = Math.max(...pts.map(p => p.y));
-
             const floors = Math.max(1, parseInt(b.floors || 1, 10));
             const totalHeight = typeof b.totalHeight === 'number' ? b.totalHeight : (floors * (b.floorHeight || 3));
             const unitsPerFloor = normalizeUnitsPerFloor({ floors, units: b.units, unitsPerFloor: b.unitsPerFloor });
+            const splitAxis = axisFromAngleDeg(b.unitSplitAngleDeg || 0);
 
             const extrudeSettings = {
                 depth: totalHeight,
                 bevelEnabled: false,
-                UVGenerator: makeUVGenerator(minX, maxX, minY, maxY, totalHeight)
+                UVGenerator: makeUVGenerator(b.shape, totalHeight, splitAxis)
             };
             const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
             geometry.computeVertexNormals();
@@ -1135,7 +1344,7 @@
 
             let mesh;
             if (own) {
-                const sideTexture = createFacadeTexture(floors, unitsPerFloor);
+                const sideTexture = createFacadeTexture(floors, unitsPerFloor, b.unitRatiosPerFloor);
                 const sideMaterial = new THREE.MeshStandardMaterial({
                     map: sideTexture,
                     color: CONFIG.MATERIALS.BUILDING_COLOR,
@@ -1177,6 +1386,7 @@
             }
         });
 
+        refreshHoverOccluderMeshes();
         applyVisibilityFilter(false);
         fitViewToBuildings();
     }
@@ -1227,6 +1437,7 @@
                 node.visible = showOwnOnly ? node.userData.own : true;
             }
         });
+        refreshHoverOccluderMeshes();
         if (shouldFit) fitViewToBuildings();
     }
 
@@ -1341,6 +1552,7 @@
 
     // ========== 点击交互 ==========
     const raycasterClick = new THREE.Raycaster();
+    const raycasterHover = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
     function onCanvasClick(event) {
@@ -1367,13 +1579,53 @@
 
         raycasterClick.setFromCamera(mouse, camera);
         const intersects = raycasterClick.intersectObjects(heatmapGroup.children, false);
+        const heatHits = filterHeatHitsByOcclusion(raycasterClick, intersects);
+        const fallbackApartmentKey = hoveredApartmentKey || selectedApartmentKey;
+        const apartmentKey = pickApartmentKeyFromHeatHits(heatHits, fallbackApartmentKey, true);
 
-        if (intersects.length > 0) {
-            const obj = intersects[0].object;
-            if (obj.userData.type === 'heatmapCell') {
-                showUnitInfo(obj.userData);
+        if (apartmentKey) {
+            const cell = findHitCellForApartment(heatHits, apartmentKey) || findRepresentativeCell(apartmentKey);
+            if (cell?.userData) {
+                setSelectedApartment(apartmentKey);
+                currentUnitInfoData = cell.userData;
+                showUnitInfo(cell.userData);
+                return;
             }
         }
+
+        clearHeatmapInteractionState();
+    }
+
+    function onCanvasMouseMove(event) {
+        if (!sunlightResults || !showHeatmap) {
+            resetHeatmapHoverState();
+            return;
+        }
+
+        const rect = renderer.domElement.getBoundingClientRect();
+        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+        raycasterHover.setFromCamera(mouse, camera);
+        const intersects = raycasterHover.intersectObjects(heatmapGroup.children, false);
+        const heatHits = filterHeatHitsByOcclusion(raycasterHover, intersects);
+        const fallbackApartmentKey = hoveredApartmentKey || selectedApartmentKey;
+        const apartmentKey = pickApartmentKeyFromHeatHits(heatHits, fallbackApartmentKey, false);
+
+        if (apartmentKey) {
+            setHoveredApartment(apartmentKey);
+            if (!selectedApartmentKey) {
+                const cell = findHitCellForApartment(heatHits, apartmentKey) || findRepresentativeCell(apartmentKey);
+                if (cell?.userData) {
+                    currentUnitInfoData = cell.userData;
+                    showSunlightStats(sunlightResults);
+                }
+            }
+            renderer.domElement.style.cursor = 'pointer';
+            return;
+        }
+
+        resetHeatmapHoverState();
     }
 
     // ========== UI 绑定 ==========
@@ -1477,7 +1729,7 @@
 
         // 关闭户型信息面板
         document.getElementById('closeUnitInfo').addEventListener('click', () => {
-            document.getElementById('unitInfoPanel').style.display = 'none';
+            clearHeatmapInteractionState();
         });
 
         // 点击画布（支持触摸和鼠标事件，防止双触发）
@@ -1489,6 +1741,10 @@
         });
         renderer.domElement.addEventListener('click', (e) => {
             if (!touchHandled) onCanvasClick(e);
+        });
+        renderer.domElement.addEventListener('mousemove', onCanvasMouseMove);
+        renderer.domElement.addEventListener('mouseleave', () => {
+            resetHeatmapHoverState();
         });
 
         // 侧边栏收起/展开
@@ -1636,6 +1892,10 @@
         if (sunlightResults) {
             showSunlightStats(sunlightResults);
         }
+
+        if (currentUnitInfoData && document.getElementById('unitInfoPanel').style.display !== 'none') {
+            showUnitInfo(currentUnitInfoData);
+        }
     }
 
     function updateLatDisplay() {
@@ -1668,6 +1928,21 @@
         }
     }
 
+    function getSunlightStatusMeta(hours) {
+        let statusText = i18n.t('viewer.statusGood');
+        let statusClass = 'good';
+
+        if (hours < 2) {
+            statusText = i18n.t('viewer.statusBad');
+            statusClass = 'bad';
+        } else if (hours < 3) {
+            statusText = i18n.t('viewer.statusWarning');
+            statusClass = 'warning';
+        }
+
+        return { text: statusText, className: statusClass };
+    }
+
     /**
      * 更新信息面板文字（支持多语言）
      */
@@ -1687,22 +1962,13 @@
         const color = getSunlightColor(hours, maxHours);
         const colorHex = '#' + color.getHexString();
         const currentLang = i18n.getCurrentLanguage();
+        const statusMeta = getSunlightStatusMeta(statusHours);
 
-        let statusText = i18n.t('viewer.statusGood');
-        let statusClass = 'good';
-        if (statusHours < 2) {
-            statusText = i18n.t('viewer.statusBad');
-            statusClass = 'bad';
-        } else if (statusHours < 3) {
-            statusText = i18n.t('viewer.statusWarning');
-            statusClass = 'warning';
-        }
-
-        const unitMaxText = unitMaxHours == null
-            ? ''
-            : (currentLang === 'zh'
+        const unitMaxText = unitMaxHours != null && Math.abs(unitMaxHours - hours) > 1e-6
+            ? (currentLang === 'zh'
                 ? `（户最大 ${unitMaxHours.toFixed(1)}h）`
-                : `(Unit max ${unitMaxHours.toFixed(1)}h)`);
+                : `(Unit max ${unitMaxHours.toFixed(1)}h)`)
+            : '';
 
         content.innerHTML = `
             <div class="info-row">
@@ -1719,7 +1985,7 @@
             </div>
             <div class="info-row">
                 <span class="info-label">${esc(i18n.t('viewer.sunlightStatus'))}</span>
-                <span class="info-value ${statusClass}">${esc(statusText)}</span>
+                <span class="info-value ${statusMeta.className}">${esc(statusMeta.text)}</span>
             </div>
             <div class="sunlight-bar">
                 <div class="sunlight-fill" style="width: ${percent}%; background: ${colorHex};"></div>
@@ -1728,6 +1994,9 @@
         `;
 
         panel.style.display = 'block';
+        if (sunlightResults) {
+            showSunlightStats(sunlightResults);
+        }
     }
 
     /**
@@ -1766,12 +2035,92 @@
             }
         }
 
+        const esc = Utils.escapeHtml;
+        const selectedData = currentUnitInfoData;
+        const selectedBuilding = selectedData ? results.buildings[String(selectedData.buildingIndex)] : null;
+        const selectedUnitHours = Number.isFinite(selectedData?.unitMaxHours)
+            ? selectedData.unitMaxHours
+            : Number(selectedData?.sunlightHours) || 0;
+        const selectedStatus = selectedData ? getSunlightStatusMeta(selectedUnitHours) : null;
+        const standardHours = CONFIG.SUNLIGHT_ANALYSIS.STANDARD_HOURS || 2;
+
         let html = `
-            <div class="stat-row">
-                <span class="stat-label">${Utils.escapeHtml(i18n.t('viewer.analysisDate'))}</span>
-                <span class="stat-value">${Utils.escapeHtml(seasonName)}</span>
+            <div class="stats-section">
+                <div class="stats-section-title">${esc(i18n.t('viewer.statsScope'))}</div>
+                <div class="stat-row">
+                    <span class="stat-label">${esc(i18n.t('viewer.analysisDate'))}</span>
+                    <span class="stat-value">${esc(seasonName)}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">${esc(i18n.t('viewer.statsTotalUnits'))}</span>
+                    <span class="stat-value">${results.totalUnits}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">${esc(i18n.t('viewer.statsAverageHours'))}</span>
+                    <span class="stat-value">${results.avgHours.toFixed(1)}h</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">${esc(i18n.t('viewer.statsMinHours'))}</span>
+                    <span class="stat-value">${results.minHours.toFixed(1)}h</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">${esc(i18n.t('viewer.statsMaxHours'))}</span>
+                    <span class="stat-value">${results.maxHours.toFixed(1)}h</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">${esc(i18n.t('viewer.statsBelowStandard'))}</span>
+                    <span class="stat-value ${results.belowStandard > 0 ? 'bad' : 'good'}">${results.belowStandard} / ${results.totalUnits}</span>
+                </div>
+                <div class="stat-note">${esc(i18n.t('viewer.statsScopeUnitMax'))} (${standardHours.toFixed(1).replace(/\.0$/, '')}h ${esc(i18n.t('viewer.statusBad'))})</div>
             </div>
         `;
+
+        if (selectedData && selectedBuilding) {
+            html += `
+                <div class="stats-section">
+                    <div class="stats-section-title">${esc(i18n.t('viewer.statsCurrentFocus'))}</div>
+                    <div class="stat-row">
+                        <span class="stat-label">${esc(i18n.t('viewer.statsCurrentUnit'))}</span>
+                        <span class="stat-value">${esc(selectedData.buildingName)} ${esc(selectedData.floor)}${esc(i18n.t('viewer.floorUnit'))} ${esc(i18n.t('viewer.unitFrom'))}${esc(selectedData.unit)}${esc(i18n.t('viewer.unitTo'))}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">${esc(i18n.t('viewer.statsStatusLabel'))}</span>
+                        <span class="stat-value ${selectedStatus.className}">${esc(selectedStatus.text)}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">${esc(i18n.t('viewer.statsMaxHours'))}</span>
+                        <span class="stat-value">${selectedUnitHours.toFixed(1)}h</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">${esc(i18n.t('viewer.sunlightDuration'))}</span>
+                        <span class="stat-value">${(Number(selectedData.sunlightHours) || 0).toFixed(1)}h</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">${esc(i18n.t('viewer.statsCurrentBuilding'))}</span>
+                        <span class="stat-value">${esc(selectedBuilding.name || selectedData.buildingName)}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">${esc(i18n.t('viewer.statsTotalUnits'))}</span>
+                        <span class="stat-value">${selectedBuilding.totalUnits}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">${esc(i18n.t('viewer.statsBuildingAverage'))}</span>
+                        <span class="stat-value">${selectedBuilding.avgHours.toFixed(1)}h</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">${esc(i18n.t('viewer.statsBuildingBelowStandard'))}</span>
+                        <span class="stat-value ${selectedBuilding.belowStandard > 0 ? 'bad' : 'good'}">${selectedBuilding.belowStandard} / ${selectedBuilding.totalUnits}</span>
+                    </div>
+                </div>
+            `;
+        } else {
+            html += `
+                <div class="stats-section">
+                    <div class="stats-section-title">${esc(i18n.t('viewer.statsCurrentFocus'))}</div>
+                    <div class="stat-note">${esc(i18n.t('viewer.statsNoSelection'))}</div>
+                </div>
+            `;
+        }
 
         statsDiv.innerHTML = html;
         statsDiv.style.display = 'block';

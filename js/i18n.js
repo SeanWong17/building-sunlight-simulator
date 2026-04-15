@@ -86,6 +86,20 @@ const i18n = (function() {
                 
                 // 统计信息
                 analysisDate: '分析日期',
+                statsScope: '统计口径',
+                statsScopeUnitMax: '按户统计，取同一户各受光片段中的最大日照时长',
+                statsTotalUnits: '总户数',
+                statsAverageHours: '平均日照',
+                statsMinHours: '最低日照',
+                statsMaxHours: '最高日照',
+                statsBelowStandard: '不达标户数',
+                statsCurrentFocus: '当前焦点',
+                statsCurrentUnit: '当前户',
+                statsCurrentBuilding: '所属楼栋',
+                statsBuildingAverage: '楼栋平均',
+                statsBuildingBelowStandard: '楼栋不达标',
+                statsNoSelection: '悬停或点击热力图可查看当前户和楼栋统计',
+                statsStatusLabel: '状态',
                 
                 // 户型信息面板
                 unitInfo: '户型信息',
@@ -275,6 +289,20 @@ const i18n = (function() {
                 
                 // Statistics
                 analysisDate: 'Analysis Date',
+                statsScope: 'Statistic Scope',
+                statsScopeUnitMax: 'Apartment-level metric using the maximum sunlight duration among all lit facade pieces of the same apartment',
+                statsTotalUnits: 'Total Apartments',
+                statsAverageHours: 'Average Sunlight',
+                statsMinHours: 'Minimum Sunlight',
+                statsMaxHours: 'Maximum Sunlight',
+                statsBelowStandard: 'Below-Standard Apartments',
+                statsCurrentFocus: 'Current Focus',
+                statsCurrentUnit: 'Current Apartment',
+                statsCurrentBuilding: 'Building',
+                statsBuildingAverage: 'Building Average',
+                statsBuildingBelowStandard: 'Building Below Standard',
+                statsNoSelection: 'Hover or click a heatmap cell to inspect the focused apartment and building summary',
+                statsStatusLabel: 'Status',
                 
                 // Unit info panel
                 unitInfo: 'Unit Information',
