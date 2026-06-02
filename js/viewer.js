@@ -670,10 +670,7 @@
         return points;
     }
 
-    /**
-     * 计算太阳方向向量
-     */
-    function calculateSunDirection(hour, latitude, declination) {
+    function calculateSunPosition(hour, latitude, declination) {
         const rad = Math.PI / 180;
         const hAngle = (hour - 12) * 15 * rad;
         const lat = latitude * rad;
@@ -682,19 +679,33 @@
         const sinAlt = Math.sin(lat) * Math.sin(dec) + Math.cos(lat) * Math.cos(dec) * Math.cos(hAngle);
         const alt = Math.asin(Math.max(-1, Math.min(1, sinAlt)));
 
-        if (alt <= 0.01) return null; // 太阳在地平线以下或刚好在地平线
-
         const cosAz = (sinAlt * Math.sin(lat) - Math.sin(dec)) / (Math.cos(alt) * Math.cos(lat));
         let az = Math.acos(Math.min(1, Math.max(-1, cosAz)));
         if (hour >= 12) az = -az;
 
-        // 返回指向太阳的方向向量
         const y = Math.sin(alt);
         const r = Math.cos(alt);
         const x = r * Math.sin(az);
         const z = r * Math.cos(az);
 
-        return new THREE.Vector3(x, y, z).normalize();
+        return {
+            altitude: alt,
+            direction: new THREE.Vector3(x, y, z).normalize()
+        };
+    }
+
+    /**
+     * 计算指向太阳的方向向量
+     */
+    function calculateSunDirection(hour, latitude, declination) {
+        const position = calculateSunPosition(hour, latitude, declination);
+        if (!position || position.altitude <= 0.01) return null; // 太阳在地平线以下或刚好在地平线
+        return position.direction;
+    }
+
+    function isFacadeFacingSun(point, sunDirection) {
+        if (!point?.outward || !sunDirection) return true;
+        return ((point.outward.x || 0) * sunDirection.x + (point.outward.y || 0) * sunDirection.z) > 1e-6;
     }
 
     /**
@@ -879,6 +890,7 @@
      */
     function checkSunlight(point, sunDirection, buildingMeshes, raycaster) {
         if (!sunDirection) return false;
+        if (!isFacadeFacingSun(point, sunDirection)) return false;
 
         // 转换坐标：数据中的 (x, y) -> 3D 中的 (x, z)，z 是高度变 y
         const origin = new THREE.Vector3(point.x, point.z, point.y);
@@ -887,7 +899,8 @@
         raycaster.near = 0.1;
         raycaster.far = 2000;
 
-        const intersects = raycaster.intersectObjects(buildingMeshes, true);
+        const occluders = buildingMeshes.filter(mesh => mesh?.userData?.buildingIndex !== point.buildingIndex);
+        const intersects = raycaster.intersectObjects(occluders, true);
         return intersects.length === 0;
     }
 
@@ -1499,23 +1512,13 @@
 
         setTimeText(hour);
 
-        const rad = Math.PI / 180;
-        const hAngle = (hour - 12) * 15 * rad;
-        const lat = LATITUDE * rad;
-        const dec = decl * rad;
-
-        const sinAlt = Math.sin(lat) * Math.sin(dec) + Math.cos(lat) * Math.cos(dec) * Math.cos(hAngle);
-        const alt = Math.asin(Math.max(-1, Math.min(1, sinAlt)));
-
-        const cosAz = (sinAlt * Math.sin(lat) - Math.sin(dec)) / (Math.cos(alt) * Math.cos(lat));
-        let az = Math.acos(Math.min(1, Math.max(-1, cosAz)));
-        if (hour >= 12) az = -az;
-
+        const sunPosition = calculateSunPosition(hour, LATITUDE, decl);
+        const alt = sunPosition.altitude;
+        const direction = sunPosition.direction;
         const dist = 800;
-        const y = dist * Math.sin(alt);
-        const r = dist * Math.cos(alt);
-        const x = r * Math.sin(az);
-        const z = r * Math.cos(az);
+        const x = direction.x * dist;
+        const y = direction.y * dist;
+        const z = direction.z * dist;
 
         sunLight.position.set(x, y, z);
         
