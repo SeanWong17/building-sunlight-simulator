@@ -47,6 +47,25 @@ if (tauriConfig.version !== packageJson.version || cargoVersion !== packageJson.
         `tauri=${tauriConfig.version}, cargo=${cargoVersion ?? '<missing>'}`
     );
 }
+
+const bundleIcons = tauriConfig.bundle?.icon;
+if (!Array.isArray(bundleIcons) || bundleIcons.length === 0) {
+    throw new Error('Tauri bundle icons are not configured');
+}
+const missingBundleIcons = [];
+for (const relative of bundleIcons) {
+    const entry = await stat(path.join(projectRoot, 'src-tauri', relative)).catch(() => null);
+    if (!entry?.isFile()) missingBundleIcons.push(relative);
+}
+for (const requiredExtension of ['.png', '.ico', '.icns']) {
+    if (!bundleIcons.some(icon => path.extname(icon).toLowerCase() === requiredExtension)) {
+        missingBundleIcons.push(`*${requiredExtension}`);
+    }
+}
+if (missingBundleIcons.length > 0) {
+    throw new Error(`Tauri bundle icons are missing: ${missingBundleIcons.join(', ')}`);
+}
+
 const manifest = JSON.parse(await readFile(path.join(distDirectory, 'desktop-manifest.json'), 'utf8'));
 if (manifest.schemaVersion !== 1 || manifest.appVersion !== packageJson.version) {
     throw new Error('Desktop manifest does not match package.json');

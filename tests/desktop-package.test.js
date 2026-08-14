@@ -13,3 +13,14 @@ test('desktop preparation contains only the declared runtime surface', async () 
     assert.ok(manifest.files.every(entry => !entry.path.startsWith('tests/')));
     assert.equal(await stat(path.join(projectRoot, 'dist', 'README.md')).catch(() => null), null);
 });
+
+test('desktop configuration declares icons for every bundle platform', async () => {
+    const config = JSON.parse(
+        await readFile(path.join(projectRoot, 'src-tauri', 'tauri.conf.json'), 'utf8')
+    );
+    const iconExtensions = new Set(config.bundle.icon.map(icon => path.extname(icon).toLowerCase()));
+
+    assert.ok(iconExtensions.has('.png'));
+    assert.ok(iconExtensions.has('.ico'));
+    assert.ok(iconExtensions.has('.icns'));
+});
