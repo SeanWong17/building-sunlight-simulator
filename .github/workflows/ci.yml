@@ -70,3 +70,10 @@ jobs:
       - name: Verify bundle output exists
         shell: bash
         run: test -n "$(find src-tauri/target/release/bundle -type f -print -quit)"
+      - name: Upload test bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: building-sunlight-simulator-${{ matrix.platform }}-${{ github.sha }}
+          path: src-tauri/target/release/bundle/**
+          if-no-files-found: error
+          retention-days: 7
