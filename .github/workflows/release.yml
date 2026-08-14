@@ -149,7 +149,13 @@ jobs:
           set -euo pipefail
           mkdir publish-assets
           while IFS= read -r -d '' asset; do
-            cp "$asset" publish-assets/
+            filename="$(basename "$asset")"
+            normalized_name="${filename// /-}"
+            if [ -e "publish-assets/$normalized_name" ]; then
+              echo "Duplicate normalized asset name: $normalized_name" >&2
+              exit 1
+            fi
+            cp "$asset" "publish-assets/$normalized_name"
           done < <(find release-assets -type f \( \
             -name '*.exe' -o \
             -name '*.msi' -o \
