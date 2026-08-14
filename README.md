@@ -49,7 +49,7 @@
 
 | 模块 | 功能描述 |
 |------|----------|
-| **部署** | 纯静态 HTML/CSS/JS，下载即用，无需安装环境 |
+| **部署** | 浏览器静态版 + Tauri 原生桌面版；桌面版不依赖 Node.js 运行时 |
 | **编辑** | 2D 平面图转 3D 模型，支持 JSON/底图拖放导入、楼栋选择移动、撤销编辑和可视化分户配置 |
 | **计算** | 基于球面三角学计算太阳轨迹，内置 50+ 城市经纬度与 IANA 时区数据 |
 | **可视** | 4096px 高精度阴影贴图，支持按半球显示的冬至/夏至/春分/秋分及自定义日期，06:00-18:00 当地民用时间实时调节，配备专业罗盘指南针 |
@@ -81,10 +81,31 @@ git clone [https://github.com/seanwong17/building-sunlight-simulator.git](https:
 ```
 
 ### 2. 运行方式
-本项目不依赖构建工具，选择以下任一方式打开：
+浏览器版本不依赖构建工具，选择以下任一方式打开：
 
 * **直接打开**：双击文件夹中的 `editor.html` 或 `index.html` 即可在浏览器运行。
 * **本地服务（可选）**：如果需要热更新或解决跨域限制，可使用 `live-server` 或 `python -m http.server`。
+
+### 3. 桌面版开发与构建
+
+桌面版使用 [Tauri 2](https://v2.tauri.app/) 封装同一套前端和日照算法。Tauri 只提供原生窗口和安装包，不引入 Electron 的完整 Chromium 运行时，因此发行包更小。
+
+```bash
+npm ci
+npm run desktop:dev       # 开发模式
+npm run desktop:build     # 当前平台 Release 安装包
+npm test                  # 单元测试 + 桌面前端包检查
+```
+
+桌面包只会复制白名单中的运行时文件到 `dist/`，不会包含源码说明、测试、脚本或示例截图。Release 使用 GitHub Actions 按平台构建：
+
+| 平台 | Release 资产 |
+|---|---|
+| Windows | NSIS Setup `.exe` + MSI `.msi` |
+| macOS | `.dmg` |
+| Linux | AppImage + Debian `.deb` |
+
+发布方式是推送 `v*` 标签。CI 会先运行 Node 测试和浏览器回归测试，再构建三平台安装包；Release 保持为草稿，全部平台成功并生成 `SHA256SUMS.txt` 后才会公开。仓库不保存任何证书或私钥；当前未配置平台证书时会生成未签名包，正式公开分发前应在 GitHub Secrets 中接入 Windows Authenticode 和 macOS Developer ID / notarization。
 
 ---
 
@@ -190,6 +211,9 @@ building-sunlight-simulator/
 ├── examples/              # 示例数据
 ├── tests/                 # 单元和浏览器回归测试
 ├── vendor/three-r128/     # Three.js、OrbitControls 与第三方许可证
+├── scripts/               # 桌面运行时准备与产物检查
+├── src-tauri/             # Tauri 原生壳层和跨平台打包配置
+├── .github/workflows/     # CI 与标签发布流水线
 ├── editor.html            # 编辑器页面
 └── index.html             # 查看器页面
 ```

@@ -49,7 +49,7 @@ It lets users draw building outlines over a JPG/PNG plan, generate a 3D scene, a
 
 | Module | Description |
 |--------|-------------|
-| **Deployment** | Pure static HTML/CSS/JS. Download and run, no environment installation required. |
+| **Deployment** | Browser static build plus a Tauri native desktop build; the desktop app has no Node.js runtime dependency. |
 | **Editor** | Converts 2D plans to 3D models with JSON/image drag-and-drop, building selection and movement, edit undo, and visual apartment splits. |
 | **Calculation** | Uses spherical trigonometry for solar paths. Built-in coordinates and IANA time zones for 50+ major cities. |
 | **Visuals** | High-precision 4096px shadow maps. Hemisphere-aware solstice/equinox labels and custom dates with local-civil-time adjustment (06:00-18:00). Professional compass for orientation. |
@@ -81,10 +81,31 @@ git clone [https://github.com/seanwong17/building-sunlight-simulator.git](https:
 ```
 
 ### 2. How to Run
-No build tools are required. Choose one of the following methods:
+The browser version requires no build tools. Choose one of the following methods:
 
 * **Direct Open**: Double-click `editor.html` or `index.html` in your file explorer to run in the browser.
 * **Local Server (Recommended)**: For hot-reloading or to avoid local file CORS restrictions, use `live-server` or `python -m http.server`.
+
+### 3. Desktop Development and Builds
+
+The desktop app uses [Tauri 2](https://v2.tauri.app/) around the same frontend and sunlight algorithm. Tauri provides the native window and installers without shipping Electron's full Chromium runtime, keeping the release package smaller.
+
+```bash
+npm ci
+npm run desktop:dev       # development mode
+npm run desktop:build     # release bundle for the current platform
+npm test                  # unit tests + desktop frontend package checks
+```
+
+The desktop preparation step copies only an explicit runtime allowlist into `dist/`; source documentation, tests, scripts, and screenshots are not bundled. GitHub Actions builds platform-native release assets:
+
+| Platform | Release assets |
+|---|---|
+| Windows | NSIS Setup `.exe` + MSI `.msi` |
+| macOS | `.dmg` |
+| Linux | AppImage + Debian `.deb` |
+
+Releases are triggered by pushing a `v*` tag. CI runs the Node and browser regression suites before building all three platforms. The GitHub Release remains a draft until every platform succeeds and `SHA256SUMS.txt` is generated. No certificates or private keys are stored in the repository; without platform credentials the workflow produces unsigned packages, so public distribution should add Windows Authenticode and macOS Developer ID / notarization through GitHub Secrets.
 
 ---
 
@@ -190,6 +211,9 @@ building-sunlight-simulator/
 ├── examples/              # Sample data
 ├── tests/                 # Unit and browser regression tests
 ├── vendor/three-r128/     # Three.js, OrbitControls, and third-party license
+├── scripts/               # Desktop runtime preparation and package checks
+├── src-tauri/             # Tauri native shell and cross-platform bundle config
+├── .github/workflows/     # CI and tag-based release pipelines
 ├── editor.html            # Editor page
 └── index.html             # Viewer page
 ```

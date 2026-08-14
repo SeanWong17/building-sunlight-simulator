@@ -1,0 +1,56 @@
+.desktop-view-tabs {
+    display: none;
+}
+
+.desktop-runtime .desktop-view-tabs {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    z-index: 110;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(112px, 1fr));
+    width: min(280px, calc(100vw - 160px));
+    min-height: 40px;
+    padding: 4px;
+    border: 1px solid rgba(126, 142, 158, 0.32);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 4px 14px rgba(16, 32, 48, 0.14);
+    transform: translateX(-50%);
+    backdrop-filter: saturate(160%) blur(8px);
+}
+
+.desktop-view-tabs a {
+    display: flex;
+    min-width: 0;
+    min-height: 32px;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 12px;
+    border-radius: 6px;
+    color: #44505c;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: 1.2;
+    text-align: center;
+    text-decoration: none;
+}
+
+.desktop-view-tabs a:hover {
+    background: #eef3f7;
+    color: #18232d;
+}
+
+.desktop-view-tabs a.is-active {
+    background: #18232d;
+    color: #fff;
+}
+
+@media (max-width: 760px) {
+    .desktop-runtime .desktop-view-tabs {
+        top: 8px;
+        width: min(220px, calc(100vw - 120px));
+        grid-template-columns: repeat(2, minmax(88px, 1fr));
+    }
+}
