@@ -27,10 +27,19 @@ jobs:
             echo "Tag $tag does not match package version $package_version" >&2
             exit 1
           fi
-          gh release create "$tag" \
-            --draft \
-            --generate-notes \
-            --title "Building Sunlight Simulator $tag"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            is_draft="$(gh release view "$tag" --json isDraft --jq .isDraft)"
+            if [ "$is_draft" != "true" ]; then
+              echo "Release $tag is already published" >&2
+              exit 1
+            fi
+            echo "Reusing existing draft release $tag"
+          else
+            gh release create "$tag" \
+              --draft \
+              --generate-notes \
+              --title "Building Sunlight Simulator $tag"
+          fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
   checks:
@@ -116,7 +125,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: bundles-${{ matrix.platform }}
-          path: src-tauri/target/release/bundle/**
+          path: |
+            src-tauri/target/release/bundle/**/*.exe
+            src-tauri/target/release/bundle/**/*.msi
+            src-tauri/target/release/bundle/**/*.dmg
+            src-tauri/target/release/bundle/**/*.AppImage
+            src-tauri/target/release/bundle/**/*.deb
           if-no-files-found: error
           retention-days: 7
 
@@ -129,19 +143,47 @@ jobs:
         with:
           pattern: bundles-*
           path: release-assets
-      - name: List and hash release assets
-        working-directory: release-assets
+      - name: Collect and hash release packages
+        shell: bash
         run: |
-          find . -type f -print | sort
-          find . -type f ! -name SHA256SUMS.txt -print0 \
+          set -euo pipefail
+          mkdir publish-assets
+          while IFS= read -r -d '' asset; do
+            cp "$asset" publish-assets/
+          done < <(find release-assets -type f \( \
+            -name '*.exe' -o \
+            -name '*.msi' -o \
+            -name '*.dmg' -o \
+            -name '*.AppImage' -o \
+            -name '*.deb' \
+          \) -print0)
+
+          shopt -s nullglob
+          windows_exe=(publish-assets/*.exe)
+          windows_msi=(publish-assets/*.msi)
+          macos_dmg=(publish-assets/*.dmg)
+          linux_appimage=(publish-assets/*.AppImage)
+          linux_deb=(publish-assets/*.deb)
+          if (( ${#windows_exe[@]} != 1 || ${#windows_msi[@]} != 1 || \
+                ${#macos_dmg[@]} != 1 || ${#linux_appimage[@]} != 1 || \
+                ${#linux_deb[@]} != 1 )); then
+            echo "Expected exactly one package for each release format" >&2
+            find publish-assets -maxdepth 1 -type f -print | sort >&2
+            exit 1
+          fi
+
+          find publish-assets -maxdepth 1 -type f -print | sort
+          cd publish-assets
+          find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -print0 \
             | sort -z \
             | xargs -0 sha256sum > SHA256SUMS.txt
       - name: Upload release assets
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.create-release.outputs.tag }}
-          files: release-assets/**/*
-          fail_on_unmatched_files: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ needs.create-release.outputs.tag }}" \
+            publish-assets/* \
+            --clobber
       - name: Publish the draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
