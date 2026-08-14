@@ -92,6 +92,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: building-sunlight-simulator-${{ matrix.platform }}-${{ github.sha }}
-          path: src-tauri/target/release/bundle/**
+          path: |
+            src-tauri/target/release/bundle/**/*.exe
+            src-tauri/target/release/bundle/**/*.msi
+            src-tauri/target/release/bundle/**/*.dmg
+            src-tauri/target/release/bundle/**/*.AppImage
+            src-tauri/target/release/bundle/**/*.deb
           if-no-files-found: error
           retention-days: 7
