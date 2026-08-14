@@ -1,0 +1,26 @@
+const assert = require('node:assert/strict');
+const { readFile, stat } = require('node:fs/promises');
+const path = require('node:path');
+const { test } = require('node:test');
+
+const projectRoot = path.resolve(__dirname, '..');
+
+test('desktop preparation contains only the declared runtime surface', async () => {
+    const manifest = JSON.parse(await readFile(path.join(projectRoot, 'dist', 'desktop-manifest.json'), 'utf8'));
+    assert.equal(manifest.schemaVersion, 1);
+    assert.deepEqual(manifest.entrypoints, ['index.html', 'editor.html']);
+    assert.ok(manifest.files.some(entry => entry.path === 'vendor/three-r128/LICENSE'));
+    assert.ok(manifest.files.every(entry => !entry.path.startsWith('tests/')));
+    assert.equal(await stat(path.join(projectRoot, 'dist', 'README.md')).catch(() => null), null);
+});
+
+test('desktop configuration declares icons for every bundle platform', async () => {
+    const config = JSON.parse(
+        await readFile(path.join(projectRoot, 'src-tauri', 'tauri.conf.json'), 'utf8')
+    );
+    const iconExtensions = new Set(config.bundle.icon.map(icon => path.extname(icon).toLowerCase()));
+
+    assert.ok(iconExtensions.has('.png'));
+    assert.ok(iconExtensions.has('.ico'));
+    assert.ok(iconExtensions.has('.icns'));
+});

@@ -1,12 +1,24 @@
 {
   "name": "building-sunlight-simulator",
-  "version": "3.2.0",
+  "version": "3.2.1",
   "private": true,
+  "description": "Offline building sunlight simulation and analysis",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.17"
+  },
+  "packageManager": "npm@9.2.0",
   "scripts": {
-    "test": "node --test tests/*.test.js",
-    "test:browser": "node tests/browser-smoke.js"
+    "test": "npm run desktop:prepare && node --test tests/*.test.js",
+    "test:browser": "node tests/browser-smoke.js",
+    "desktop:prepare": "node scripts/prepare-desktop.mjs",
+    "desktop:verify": "node scripts/verify-desktop-package.mjs",
+    "desktop:dev": "tauri dev",
+    "desktop:build": "tauri build",
+    "desktop:build:debug": "tauri build --debug"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "2.11.4",
     "playwright": "1.61.1"
   }
 }

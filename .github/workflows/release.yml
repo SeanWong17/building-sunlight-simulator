@@ -1,0 +1,148 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    name: Create draft release
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create draft GitHub Release
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          package_version="$(node -p "require('./package.json').version")"
+          if [ "$version" != "$package_version" ]; then
+            echo "Tag $tag does not match package version $package_version" >&2
+            exit 1
+          fi
+          gh release create "$tag" \
+            --draft \
+            --generate-notes \
+            --title "Building Sunlight Simulator $tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+  checks:
+    name: Validate release source
+    needs: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run desktop:verify
+      - name: Install Chromium for browser smoke tests
+        run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
+
+  build:
+    name: Build ${{ matrix.platform }} release assets
+    needs: [create-release, checks]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            os: windows-latest
+            bundles: nsis,msi
+          - platform: macos
+            os: macos-latest
+            bundles: dmg
+          - platform: linux
+            os: ubuntu-22.04
+            bundles: appimage,deb
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux Tauri dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            librsvg2-dev \
+            wget
+      - run: npm ci
+      - name: Build release bundles
+        run: npm run desktop:build -- --ci --bundles "${{ matrix.bundles }}"
+      - name: Smoke test Windows application startup
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $app = Resolve-Path 'src-tauri/target/release/building-sunlight-simulator.exe'
+          $process = Start-Process -FilePath $app.Path -PassThru
+          try {
+            Start-Sleep -Seconds 10
+            if ($process.HasExited) {
+              throw "Application exited during startup with code $($process.ExitCode)"
+            }
+            Write-Host "Application remained active for 10 seconds (PID $($process.Id))"
+          } finally {
+            if (-not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force
+              $process.WaitForExit()
+            }
+          }
+      - name: Verify bundle output exists
+        shell: bash
+        run: test -n "$(find src-tauri/target/release/bundle -type f -print -quit)"
+      - name: Upload platform bundles for release assembly
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundles-${{ matrix.platform }}
+          path: src-tauri/target/release/bundle/**
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish release assets
+    needs: [create-release, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bundles-*
+          path: release-assets
+      - name: List and hash release assets
+        working-directory: release-assets
+        run: |
+          find . -type f -print | sort
+          find . -type f ! -name SHA256SUMS.txt -print0 \
+            | sort -z \
+            | xargs -0 sha256sum > SHA256SUMS.txt
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.create-release.outputs.tag }}
+          files: release-assets/**/*
+          fail_on_unmatched_files: true
+      - name: Publish the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${{ needs.create-release.outputs.tag }}" --draft=false
