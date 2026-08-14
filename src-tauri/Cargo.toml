@@ -1,6 +1,6 @@
 [package]
 name = "building-sunlight-simulator"
-version = "3.2.0"
+version = "3.2.1"
 description = "Offline building sunlight simulation and analysis"
 authors = ["SeanWong17"]
 edition = "2021"
