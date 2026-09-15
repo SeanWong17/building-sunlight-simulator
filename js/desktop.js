@@ -31,7 +31,14 @@
     routes.forEach(route => {
         const link = document.createElement('a');
         link.href = route.file;
+        link.addEventListener('click', event => {
+            if (route.file === currentFile) return;
+            if (!window.dispatchEvent(new Event('project:navigate', { cancelable: true }))) {
+                event.preventDefault();
+            }
+        });
         if (route.file === currentFile) {
+            link.addEventListener('click', event => event.preventDefault());
             link.className = 'is-active';
             link.setAttribute('aria-current', 'page');
         }

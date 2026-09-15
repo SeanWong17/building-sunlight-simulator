@@ -212,6 +212,18 @@ async function testViewer(browser) {
     assert.equal(await page.locator('#timeZoneInput').inputValue(), 'Asia/Shanghai');
     assert.equal(await page.locator('script[src^="http"]').count(), 0);
 
+    const narrowProject = JSON.parse(projectJson());
+    narrowProject.buildings[0].units = 3;
+    narrowProject.buildings[0].unitRatiosPerFloor = [[0.499, 0.002, 0.499]];
+    await uploadJson(page, JSON.stringify(narrowProject), 'narrow-units.json');
+    await calculateAverageHours(page, true);
+    const narrowDownloadPromise = page.waitForEvent('download');
+    await page.evaluate(() => { window.showSaveFilePicker = undefined; });
+    await page.locator('#exportAnalysisBtn').click();
+    const narrowDownload = await narrowDownloadPromise;
+    const narrowExport = JSON.parse(fs.readFileSync(await narrowDownload.path(), 'utf8'));
+    assert.equal(narrowExport.precomputedSunlight.entries[0].pointCount, 8);
+
     await page.locator('#timeSlider').evaluate(element => {
         element.value = '10.1';
         element.dispatchEvent(new Event('input', { bubbles: true }));
@@ -618,6 +630,15 @@ async function testEditor(browser) {
     const secondImage = path.join(__dirname, '..', 'examples', 'vis.png');
     await page.locator('#fileInput').setInputFiles(firstImage);
     await page.waitForFunction(() => document.getElementById('editorCanvas').width > 0);
+    await page.addScriptTag({ content: 'window.__TAURI_INTERNALS__ = {};' });
+    await page.addScriptTag({ url: `${baseUrl}/js/desktop.js` });
+    const leaveDialog = page.waitForEvent('dialog');
+    const leaveClick = page.locator('.desktop-view-tabs a[href="index.html"]').click();
+    await (await leaveDialog).dismiss();
+    await leaveClick;
+    assert.match(page.url(), /editor\.html$/);
+    assert.equal(await page.locator('#editorCanvas').isVisible(), true);
+    await page.locator('.desktop-view-tabs').evaluate(element => element.remove());
     assert.equal(await page.locator('#projectLon').inputValue(), '117.12');
     assert.equal(await page.locator('#projectTimeZone').inputValue(), 'Asia/Shanghai');
 

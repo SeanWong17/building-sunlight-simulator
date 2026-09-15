@@ -585,7 +585,7 @@
 
     function getHeatmapCellWidth(subLen) {
         const sideInset = 0.12;
-        return Math.max(0.06, subLen - sideInset * 2);
+        return Math.min(subLen * 0.9, Math.max(0.06, subLen - sideInset * 2));
     }
 
     // ========== 日照分析核心功能 ==========
@@ -691,7 +691,7 @@
                     }
 
                     const subLen = (tEnd - tStart) * segment.len;
-                    if (subLen < 0.1) continue;
+                    if (subLen <= 1e-9) continue;
 
                     const midX = segment.start.x + tMid * (segment.end.x - segment.start.x);
                     const midY = segment.start.y + tMid * (segment.end.y - segment.start.y);
@@ -1440,7 +1440,7 @@
                 }
                 if (message.type === 'complete') {
                     cleanup();
-                    resolve(new Float32Array(message.hours));
+                    resolve(new Float64Array(message.hours));
                     return;
                 }
                 if (message.type === 'error') {
@@ -1464,10 +1464,11 @@
         let batchSteps = 0;
 
         for (const point of allPoints) {
+            let litIntervals = 0;
             for (const sunDirection of sunDirections) {
                 assertAnalysisActive(task);
                 if (sunDirection && checkSunlight(point, sunDirection, buildingMeshes, raycaster)) {
-                    point.sunlightHours += timeStep;
+                    litIntervals++;
                 }
                 completedSteps++;
                 batchSteps++;
@@ -1477,6 +1478,7 @@
                     await new Promise(resolve => setTimeout(resolve, 0));
                 }
             }
+            point.sunlightHours = Utils.roundTo(litIntervals * timeStep, 6);
         }
         if (progressCallback) progressCallback(1);
     }
@@ -1660,7 +1662,7 @@
             const building = currentData.buildings[point.buildingIndex];
             const floorHeight = building.floorHeight || 3;
             const cellHeight = floorHeight * 0.9;
-            const cellWidth = Math.max(0.06, Number(point.cellWidth) || 0.6);
+            const cellWidth = Number(point.cellWidth) || 0.6;
             const color = getSunlightColor(point.sunlightHours, maxHours);
             const wallHeight = (point.floor - 0.5) * floorHeight;
             const normalX = point.outward?.x || 0;

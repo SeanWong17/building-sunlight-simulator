@@ -211,7 +211,7 @@
             const bvh = buildTriangleBvh(createTriangles(payload.meshes));
             const pointCount = origins.length / 3;
             const directionCount = directions.length / 3;
-            const hours = new Float32Array(pointCount);
+            const hours = new Float64Array(pointCount);
             const pointsPerBatch = 8;
             let pointIndex = 0;
 
@@ -235,11 +235,11 @@
                             if (outwardNormals[normalOffset] * dx
                                 + outwardNormals[normalOffset + 1] * dz <= 1e-6) continue;
                             if (!isRayBlocked(bvh, ox, oy, oz, dx, dy, dz, near, far)) {
-                                hours[pointIndex] += timeStep;
+                                hours[pointIndex]++;
                             }
                         }
+                        hours[pointIndex] = Math.round(hours[pointIndex] * timeStep * 1e6) / 1e6;
                     }
-
                     self.postMessage({ type: 'progress', value: pointIndex / pointCount });
                     if (pointIndex < pointCount) {
                         setTimeout(processBatch, 0);

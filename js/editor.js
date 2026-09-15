@@ -66,6 +66,23 @@
     let buildingDragState = null;
     let editHistory = [];
     let visualSplitState = null;
+    let navigationApproved = false;
+
+    window.addEventListener('project:navigate', event => {
+        if (!isImageLoaded && buildings.length === 0 && currentPoly.length === 0) return;
+        const message = i18n.getCurrentLanguage() === 'zh'
+            ? '离开将丢失当前画布和未导出的修改。确定离开？'
+            : 'Leaving will discard the current canvas and changes that have not been exported. Leave?';
+        navigationApproved = confirm(message);
+        if (!navigationApproved) event.preventDefault();
+    });
+
+    // A full-page navigation destroys the in-memory drawing, including the plan image.
+    window.addEventListener('beforeunload', event => {
+        if (navigationApproved || (!isImageLoaded && buildings.length === 0 && currentPoly.length === 0)) return;
+        event.preventDefault();
+        event.returnValue = '';
+    });
 
     // 使用配置常量
     const CLOSE_EPS_BASE = CONFIG.EDITOR.CLOSE_EPSILON;

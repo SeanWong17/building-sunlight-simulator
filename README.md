@@ -245,8 +245,8 @@ building-sunlight-simulator/
 ## 📈 Star History
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/SeanWong17/building-sunlight-simulator/star-history-assets/assets/star-history/star-history-dark.svg">
-  <img alt="Star History Chart" src="https://raw.githubusercontent.com/SeanWong17/building-sunlight-simulator/star-history-assets/assets/star-history/star-history-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=SeanWong17/building-sunlight-simulator&amp;type=Date&amp;theme=dark">
+  <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=SeanWong17/building-sunlight-simulator&amp;type=Date">
 </picture>
 
 ---
