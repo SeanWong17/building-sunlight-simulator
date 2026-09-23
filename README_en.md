@@ -35,6 +35,9 @@
 
 </div>
 
+> Hosted in China on AtomGit: [AtomGit mirror](https://atomgit.com/qq_45141261/building-sunlight-simulator) · [Primary GitHub repository](https://github.com/SeanWong17/building-sunlight-simulator)
+> GitHub is the primary repository. Please submit issues and pull requests on [GitHub](https://github.com/SeanWong17/building-sunlight-simulator).
+
 ---
 
 ## 📋 Introduction

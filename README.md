@@ -35,6 +35,9 @@
 
 </div>
 
+> 国内 AtomGit 托管：[AtomGit 镜像](https://atomgit.com/qq_45141261/building-sunlight-simulator) · [GitHub 主仓库](https://github.com/SeanWong17/building-sunlight-simulator)
+> 本项目以 GitHub 为主仓库，Issue 和 PR 请优先提交至 [GitHub](https://github.com/SeanWong17/building-sunlight-simulator)。
+
 ---
 
 ## 📋 项目简介
